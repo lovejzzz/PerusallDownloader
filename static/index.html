@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perusall Article Downloader</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .code-area {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        #console {
+            background-color: black;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .progress {
+            height: 25px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Perusall Article Downloader</h1>
+        
+        <!-- Instructions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Open your Perusall article in Chrome/Firefox</li>
+                    <li>Press F12 to open Developer Tools</li>
+                    <li>Click on Console tab</li>
+                    <li>Copy and paste the code below into the console</li>
+                    <li>Copy the output from the console and paste it in the input area below</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- JavaScript Code -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">JavaScript Code</h5>
+                <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
+            </div>
+            <div class="card-body">
+                <div class="code-area" id="codeArea">var len = 0; 
+var times = 0;
+var i = setInterval(() => { 
+    var img = document.querySelectorAll("img.chunk"); 
+    img[img.length-1].scrollIntoView(); 
+    if (len < img.length) {
+        len = img.length;
+    } else if (times > 3) {
+        var urls = [];
+        img.forEach((e) => urls.push(e.src));
+        var spl = location.pathname.split('/');
+        console.info('urls = """\\n' + urls.join('\\n') + '\\n"""\\n\\ntitle="' + spl[spl.length-1] + '"');
+        clearInterval(i);
+    } else {
+        times++;
+    }
+}, 2000);</div>
+            </div>
+        </div>
+
+        <!-- Console Output -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Console</h5>
+            </div>
+            <div class="card-body">
+                <!-- Input Area -->
+                <div class="mb-3">
+                    <label class="form-label">Paste console output here:</label>
+                    <textarea class="form-control mb-3" id="input" rows="8"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="startDownload()">Download Article</button>
+                </div>
+
+                <!-- Progress Area (hidden initially) -->
+                <div id="progressArea" style="display: none;">
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             id="progressBar" 
+                             role="progressbar" 
+                             style="width: 0%">0%</div>
+                    </div>
+                    <div id="console"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.hostname === 'localhost' ? '' : 'http://localhost:5001';
+
+        function copyCode() {
+            const code = document.getElementById('codeArea').textContent;
+            navigator.clipboard.writeText(code)
+                .then(() => alert('Code copied to clipboard!'))
+                .catch(err => console.error('Failed to copy code:', err));
+        }
+
+        let currentDownloadId = null;
+        let statusCheckInterval = null;
+
+        function startDownload() {
+            const input = document.getElementById('input').value.trim();
+            if (!input) {
+                alert('Please paste the console output first!');
+                return;
+            }
+
+            // Parse input
+            let urls, title;
+            try {
+                // Execute the input in a safe way
+                const match = input.match(/urls = """([\s\S]*?)"""\s*title="([^"]+)"/);
+                if (!match) {
+                    throw new Error('Invalid input format');
+                }
+                urls = match[1];
+                title = match[2];
+            } catch (e) {
+                alert('Invalid input format. Make sure you copied the entire console output.');
+                return;
+            }
+
+            // Show progress area
+            document.getElementById('progressArea').style.display = 'block';
+            document.getElementById('console').innerHTML = '';
+            updateProgress(0);
+
+            // Start download
+            fetch(`${API_BASE_URL}/api/download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ urls, title })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Server error');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                currentDownloadId = data.download_id;
+                // Start checking status
+                if (statusCheckInterval) {
+                    clearInterval(statusCheckInterval);
+                }
+                statusCheckInterval = setInterval(checkStatus, 1000);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                logMessage('Error: ' + error.message);
+                alert('Error: ' + error.message);
+            });
+        }
+
+        function checkStatus() {
+            if (!currentDownloadId) return;
+
+            fetch(`${API_BASE_URL}/api/status/${currentDownloadId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to get status');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    updateProgress(data.progress);
+                    
+                    // Update messages
+                    const console = document.getElementById('console');
+                    while (console.children.length < data.messages.length) {
+                        const msg = data.messages[console.children.length];
+                        logMessage(msg);
+                    }
+
+                    // Check if download is complete or failed
+                    if (data.status === 'completed' || data.status === 'error') {
+                        clearInterval(statusCheckInterval);
+                        currentDownloadId = null;
+                        if (data.error) {
+                            alert('Error: ' + data.error);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status:', error);
+                    logMessage('Error checking status: ' + error.message);
+                    clearInterval(statusCheckInterval);
+                    currentDownloadId = null;
+                });
+        }
+
+        function updateProgress(progress) {
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${Math.round(progress)}%`;
+        }
+
+        function logMessage(message) {
+            const console = document.getElementById('console');
+            const line = document.createElement('div');
+            line.textContent = message;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
+        }
+    </script>
+</body>
+</html>
