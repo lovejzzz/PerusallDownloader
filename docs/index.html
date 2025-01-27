@@ -136,7 +136,7 @@ title="${spl[spl.length-1]}"
                     <div id="console"></div>
                 </div>
                 <div id="downloadButtonArea" style="display: none;">
-                    <button class="btn btn-primary" onclick="downloadArticle()">Download Article</button>
+                    <button class="btn btn-success" onclick="downloadArticle()">Download PDF</button>
                 </div>
             </div>
         </div>
@@ -261,11 +261,11 @@ title="${spl[spl.length-1]}"
                         clearInterval(statusCheckInterval);
                         if (data.error) {
                             alert('Error: ' + data.error);
+                            currentDownloadId = null;
                         } else {
-                            // Show download button
+                            // Show download button and save the download ID
                             document.getElementById('downloadButtonArea').style.display = 'block';
                         }
-                        currentDownloadId = null;
                     }
                 })
                 .catch(error => {
@@ -291,11 +291,27 @@ title="${spl[spl.length-1]}"
         }
 
         function downloadArticle() {
-            if (!currentDownloadId) {
-                alert('No download ready. Please start a new download.');
-                return;
-            }
-            window.location.href = `${API_BASE_URL}/api/pdf/${currentDownloadId}`;
+            fetch(`${API_BASE_URL}/api/pdf/${currentDownloadId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Download failed');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'article.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                })
+                .catch(error => {
+                    console.error('Download error:', error);
+                    alert('Failed to download the PDF. Please try again.');
+                });
         }
     </script>
 </body>
