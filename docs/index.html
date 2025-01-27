@@ -71,7 +71,10 @@ var i = setInterval(() => {
         var urls = [];
         img.forEach((e) => urls.push(e.src));
         var spl = location.pathname.split('/');
-        console.info('urls = """\\n' + urls.join('\\n') + '\\n"""\\n\\ntitle="' + spl[spl.length-1] + '"');
+        console.log('urls = """');
+        urls.forEach(url => console.log(url));
+        console.log('"""');
+        console.log('title="' + spl[spl.length-1] + '"');
         clearInterval(i);
     } else {
         times++;
@@ -134,12 +137,15 @@ var i = setInterval(() => {
             let urls, title;
             try {
                 // Execute the input in a safe way
-                const match = input.match(/urls = """([\s\S]*?)"""\s*title="([^"]+)"/);
-                if (!match) {
+                const urlsMatch = input.match(/urls = """\n([\s\S]*?)\n"""/);
+                const titleMatch = input.match(/title="([^"]+)"/);
+                
+                if (!urlsMatch || !titleMatch) {
                     throw new Error('Invalid input format');
                 }
-                urls = match[1];
-                title = match[2];
+                
+                urls = urlsMatch[1];
+                title = titleMatch[1];
             } catch (e) {
                 alert('Invalid input format. Make sure you copied the entire console output.');
                 return;
