@@ -48,7 +48,10 @@
                     <li>Press F12 to open Developer Tools</li>
                     <li>Click on Console tab</li>
                     <li>Copy and paste the code below into the console</li>
-                    <li>Copy the output from the console and paste it in the input area below</li>
+                    <li>Wait for the code to finish running (it will scroll through the article)</li>
+                    <li>Look for output between "=== START OF DOWNLOAD INFO ===" and "=== END OF DOWNLOAD INFO ==="</li>
+                    <li>Copy <strong>everything</strong> including the START and END markers</li>
+                    <li>Paste the entire output in the input area below</li>
                 </ol>
             </div>
         </div>
@@ -72,12 +75,32 @@ var i = setInterval(() => {
         img.forEach((e) => urls.push(e.src));
         var spl = location.pathname.split('/');
         console.clear();  // Clear previous output
-        console.log("=== START OF DOWNLOAD INFO ===");
-        console.log("urls = '''");  // Using single quotes instead
-        urls.forEach(url => console.log(url));
-        console.log("'''");
-        console.log(`title="${spl[spl.length-1]}"`);
-        console.log("=== END OF DOWNLOAD INFO ===");
+        
+        // Create the output text
+        var outputText = `=== START OF DOWNLOAD INFO ===
+urls = '''
+${urls.join('\n')}
+'''
+title="${spl[spl.length-1]}"
+=== END OF DOWNLOAD INFO ===`;
+
+        // Log the output
+        console.log(outputText);
+        
+        // Create and inject copy button
+        var btn = document.createElement('button');
+        btn.textContent = 'Copy Download Info';
+        btn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
+        btn.onclick = function() {
+            navigator.clipboard.writeText(outputText)
+                .then(() => {
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => btn.textContent = 'Copy Download Info', 2000);
+                })
+                .catch(err => console.error('Failed to copy:', err));
+        };
+        document.body.appendChild(btn);
+        
         clearInterval(i);
     } else {
         times++;
