@@ -135,6 +135,9 @@ title="${spl[spl.length-1]}"
                     </div>
                     <div id="console"></div>
                 </div>
+                <div id="downloadButtonArea" style="display: none;">
+                    <button class="btn btn-primary" onclick="downloadArticle()">Download Article</button>
+                </div>
             </div>
         </div>
     </div>
@@ -256,10 +259,13 @@ title="${spl[spl.length-1]}"
                     // Check if download is complete or failed
                     if (data.status === 'completed' || data.status === 'error') {
                         clearInterval(statusCheckInterval);
-                        currentDownloadId = null;
                         if (data.error) {
                             alert('Error: ' + data.error);
+                        } else {
+                            // Show download button
+                            document.getElementById('downloadButtonArea').style.display = 'block';
                         }
+                        currentDownloadId = null;
                     }
                 })
                 .catch(error => {
@@ -282,6 +288,10 @@ title="${spl[spl.length-1]}"
             line.textContent = message;
             console.appendChild(line);
             console.scrollTop = console.scrollHeight;
+        }
+
+        function downloadArticle() {
+            // Implement download logic here
         }
     </script>
 </body>
