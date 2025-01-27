@@ -154,6 +154,7 @@ title="${spl[spl.length-1]}"
 
         let currentDownloadId = null;
         let statusCheckInterval = null;
+        let currentTitle = null;
 
         function startDownload() {
             const input = document.getElementById('input').value.trim();
@@ -189,6 +190,7 @@ title="${spl[spl.length-1]}"
                     throw new Error('Could not find title. Make sure you copied everything between the markers.');
                 }
                 title = titleMatch[1];
+                currentTitle = title;
                 
                 console.log("Parsed successfully:", { urls, title });
             } catch (e) {
@@ -302,7 +304,9 @@ title="${spl[spl.length-1]}"
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'article.pdf';
+                    // Clean up the title and add .pdf extension
+                    const cleanTitle = currentTitle.replace(/[/\\?%*:|"<>]/g, '-').trim();
+                    a.download = cleanTitle + '.pdf';
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
