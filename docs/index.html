@@ -71,10 +71,13 @@ var i = setInterval(() => {
         var urls = [];
         img.forEach((e) => urls.push(e.src));
         var spl = location.pathname.split('/');
-        console.log('urls = """');
+        console.clear();  // Clear previous output
+        console.log("=== START OF DOWNLOAD INFO ===");
+        console.log("urls = '''");  // Using single quotes instead
         urls.forEach(url => console.log(url));
-        console.log('"""');
-        console.log('title="' + spl[spl.length-1] + '"');
+        console.log("'''");
+        console.log(`title="${spl[spl.length-1]}"`);
+        console.log("=== END OF DOWNLOAD INFO ===");
         clearInterval(i);
     } else {
         times++;
@@ -136,18 +139,35 @@ var i = setInterval(() => {
             // Parse input
             let urls, title;
             try {
-                // Execute the input in a safe way
-                const urlsMatch = input.match(/urls = """\n([\s\S]*?)\n"""/);
-                const titleMatch = input.match(/title="([^"]+)"/);
+                console.log("Parsing input:", input);
                 
-                if (!urlsMatch || !titleMatch) {
-                    throw new Error('Invalid input format');
+                // Look for content between START and END markers
+                const contentMatch = input.match(/=== START OF DOWNLOAD INFO ===\n([\s\S]*?)=== END OF DOWNLOAD INFO ===/);
+                if (!contentMatch) {
+                    throw new Error('Could not find download info markers. Please make sure you copied the entire console output.');
                 }
                 
-                urls = urlsMatch[1];
+                const content = contentMatch[1].trim();
+                console.log("Found content:", content);
+                
+                // Extract URLs
+                const urlsMatch = content.match(/urls = '''[\n\r]+([\s\S]*?)[\n\r]+'''/);
+                if (!urlsMatch) {
+                    throw new Error('Could not find URLs section. Make sure you copied everything between the markers.');
+                }
+                urls = urlsMatch[1].trim();
+                
+                // Extract title
+                const titleMatch = content.match(/title="([^"]+)"/);
+                if (!titleMatch) {
+                    throw new Error('Could not find title. Make sure you copied everything between the markers.');
+                }
                 title = titleMatch[1];
+                
+                console.log("Parsed successfully:", { urls, title });
             } catch (e) {
-                alert('Invalid input format. Make sure you copied the entire console output.');
+                console.error("Parsing error:", e);
+                alert('Invalid input format: ' + e.message);
                 return;
             }
 
