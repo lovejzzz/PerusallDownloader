@@ -1,81 +1,49 @@
 # Perusall Article Downloader
 
-A web application that helps download articles from Perusall as PDF files. This tool provides a user-friendly interface to download articles while maintaining their quality and organization.
+A web-based tool to download articles from Perusall as PDFs. Access it here: [Perusall Article Downloader](https://lovejzzz.github.io/PerusallDownloader/)
+
+## How to Use
+
+1. Go to [Perusall Article Downloader](https://lovejzzz.github.io/PerusallDownloader/)
+2. Open your Perusall article in Chrome/Firefox
+3. Press F12 to open Developer Tools
+4. Click on Console tab
+5. Copy the JavaScript code from the website
+6. Paste it into your browser's console
+7. Wait for the code to finish running (it will scroll through the article)
+8. Look for the green "Copy Download Info" button in the top-right corner
+9. Click the button to copy the article information
+10. Go back to the Perusall Article Downloader website
+11. Paste the copied information into the input area
+12. Click "Download Article" and wait for processing
+13. When it reaches 100%, click the green "Download PDF" button
+14. Your PDF will download with the article's title as the filename
 
 ## Features
 
 - Easy-to-use web interface
-- Real-time progress tracking
-- Automatic PDF generation
-- Clean and modern UI
-- Cross-browser compatibility
+- No installation required
+- Automatic article scrolling
+- One-click copy functionality
+- Progress tracking
+- Downloads as PDF with article title as filename
+- Works with any Perusall article
 
-## Project Structure
+## Technical Requirements
 
-```
-.
-├── docs/               # Frontend files (GitHub Pages)
-│   └── index.html     # Main web interface
-├── backend/           # Backend server
-│   ├── web_app.py    # Flask application
-│   ├── app.py        # Legacy desktop app
-│   └── requirements.txt
-└── README.md
-```
+- A modern web browser (Chrome or Firefox recommended)
+- JavaScript enabled
+- Access to Perusall
 
-## How to Use
+## Privacy
 
-1. Visit [https://yourusername.github.io/perusall-downloader](https://yourusername.github.io/perusall-downloader)
-2. Open your Perusall article in Chrome/Firefox
-3. Press F12 to open Developer Tools
-4. Click on the Console tab
-5. Copy and paste the provided JavaScript code into the console
-6. Copy the output from the console
-7. Paste it into the web interface
-8. Click "Download Article"
-9. Wait for the process to complete
-10. Click "Download PDF" when ready
+This tool runs entirely in your browser. Your article information is only used for the download process and is not stored or shared.
 
-## Development
+## Issues
 
-### Frontend
-The frontend is hosted on GitHub Pages from the `docs` directory. After making changes to the frontend:
-1. Commit and push your changes
-2. Go to repository Settings > Pages
-3. Select the `docs` folder as the source
+If you encounter any issues, please:
+1. Make sure you copied the entire console output (including the START and END markers)
+2. Check that your browser's JavaScript is enabled
+3. Try refreshing the page and starting over
 
-### Backend
-The backend needs to be hosted separately (e.g., on Heroku, DigitalOcean, or AWS).
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/perusall-downloader.git
-cd perusall-downloader/backend
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Run the Flask server:
-```bash
-python web_app.py
-```
-
-4. The server will run on http://localhost:5001
-
-## Requirements
-
-- Python 3.x
-- Flask
-- ImageMagick
-- img2pdf
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+For bug reports or feature requests, please [open an issue](https://github.com/lovejzzz/PerusallDownloader/issues).
