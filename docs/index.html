@@ -291,7 +291,11 @@ title="${spl[spl.length-1]}"
         }
 
         function downloadArticle() {
-            // Implement download logic here
+            if (!currentDownloadId) {
+                alert('No download ready. Please start a new download.');
+                return;
+            }
+            window.location.href = `${API_BASE_URL}/api/pdf/${currentDownloadId}`;
         }
     </script>
 </body>
