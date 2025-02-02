@@ -166,6 +166,10 @@ title="${spl[spl.length-1]}"
             document.getElementById('progressText').textContent = message;
         }
 
+        async function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
         async function downloadArticle() {
             const input = document.getElementById('inputArea').value;
             if (!input) {
@@ -190,13 +194,21 @@ title="${spl[spl.length-1]}"
 
                 // Download all images using CORS proxy
                 const images = [];
+                const failedPages = [];
+                
                 for (let i = 0; i < urls.length; i++) {
                     updateProgress((i / urls.length) * 90, `Downloading page ${i + 1} of ${urls.length}`);
                     try {
+                        // Add a small delay between requests to avoid rate limits
+                        if (i > 0) {
+                            await sleep(1000); // 1 second delay between requests
+                        }
+
                         // Try multiple CORS proxies in case one fails
                         const proxyUrls = [
                             `https://api.allorigins.win/raw?url=${encodeURIComponent(urls[i])}`,
                             `https://corsproxy.io/?${encodeURIComponent(urls[i])}`,
+                            `https://cors.bridged.cc/${urls[i]}`,
                             `https://cors-anywhere.herokuapp.com/${urls[i]}`
                         ];
 
@@ -206,11 +218,16 @@ title="${spl[spl.length-1]}"
                         // Try each proxy until one works
                         for (const proxyUrl of proxyUrls) {
                             try {
-                                const response = await fetch(proxyUrl);
+                                const response = await fetch(proxyUrl, {
+                                    headers: {
+                                        'Origin': 'https://lovejzzz.github.io'
+                                    }
+                                });
                                 if (response.ok) {
                                     blob = await response.blob();
                                     break;
                                 }
+                                await sleep(500); // 0.5 second delay between proxy attempts
                             } catch (e) {
                                 proxyError = e;
                                 continue;
@@ -226,7 +243,20 @@ title="${spl[spl.length-1]}"
                         logMessage(`Downloaded page ${i + 1}`);
                     } catch (error) {
                         logMessage(`Error downloading page ${i + 1}: ${error.message}`);
-                        throw error;
+                        failedPages.push(i + 1);
+                        // Continue with other pages instead of stopping
+                        images.push(null);
+                    }
+                }
+
+                if (images.length === 0) {
+                    throw new Error('No pages were downloaded successfully');
+                }
+
+                if (failedPages.length > 0) {
+                    logMessage(`Warning: Failed to download pages: ${failedPages.join(', ')}`);
+                    if (!confirm('Some pages failed to download. Would you like to continue creating the PDF with the successfully downloaded pages?')) {
+                        throw new Error('Download cancelled by user');
                     }
                 }
 
@@ -237,8 +267,11 @@ title="${spl[spl.length-1]}"
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
                 
+                let pageCount = 0;
                 for (let i = 0; i < images.length; i++) {
-                    if (i > 0) doc.addPage();
+                    if (!images[i]) continue; // Skip failed pages
+                    
+                    if (pageCount > 0) doc.addPage();
                     
                     // Create temporary image element to get dimensions
                     const img = new Image();
@@ -266,6 +299,7 @@ title="${spl[spl.length-1]}"
                     const y = (pageHeight - height) / 2;
                     
                     doc.addImage(img, 'JPEG', x, y, width, height);
+                    pageCount++;
                 }
 
                 updateProgress(100, 'Download complete!');
@@ -275,14 +309,30 @@ title="${spl[spl.length-1]}"
                 doc.save(title + '.pdf');
 
                 // Cleanup
-                images.forEach(URL.revokeObjectURL);
+                images.filter(img => img !== null).forEach(URL.revokeObjectURL);
+
+                if (failedPages.length > 0) {
+                    // Show manual download button for failed pages only
+                    const manualBtn = document.createElement('button');
+                    manualBtn.className = 'btn btn-warning mt-3';
+                    manualBtn.textContent = 'Download Failed Pages Manually';
+                    manualBtn.onclick = () => {
+                        failedPages.forEach(pageNum => {
+                            window.open(urls[pageNum - 1], '_blank');
+                        });
+                        logMessage('Manual download: Failed pages opened in new tabs');
+                        logMessage('1. Save each image (right-click -> Save Image As...)');
+                        logMessage('2. Use a PDF tool to combine with the existing PDF');
+                    };
+                    document.querySelector('.card-body').appendChild(manualBtn);
+                }
 
             } catch (error) {
                 logMessage('Error: ' + error.message);
                 updateProgress(0, 'Error: ' + error.message);
                 logMessage('If automatic download fails, click the "Manual Download" button below.');
                 
-                // Show manual download button
+                // Show manual download button for all pages
                 const manualBtn = document.createElement('button');
                 manualBtn.className = 'btn btn-warning mt-3';
                 manualBtn.textContent = 'Try Manual Download';
