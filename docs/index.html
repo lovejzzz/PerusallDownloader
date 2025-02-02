@@ -185,22 +185,117 @@ title="${spl[spl.length-1]}"
                 const urls = urlsMatch[1].trim().split('\n');
                 const title = titleMatch[1];
 
-                logMessage('Due to Perusall\'s security restrictions, we need to open each page in new tabs.');
-                logMessage('Please save each image that opens (right-click -> Save Image As...)');
-                logMessage('After saving all images, use a PDF tool to combine them.');
-                
-                // Open each image in a new tab
-                urls.forEach((url, index) => {
-                    logMessage(`Opening page ${index + 1} in new tab...`);
-                    window.open(url, '_blank');
-                });
+                updateProgress(0, 'Starting download...');
+                logMessage('Starting download of ' + title);
 
-                logMessage('All pages have been opened in new tabs.');
-                logMessage('1. Save each image (right-click -> Save Image As...)');
-                logMessage('2. Use a PDF tool like Adobe Acrobat or Preview to combine the images.');
+                // Download all images using CORS proxy
+                const images = [];
+                for (let i = 0; i < urls.length; i++) {
+                    updateProgress((i / urls.length) * 90, `Downloading page ${i + 1} of ${urls.length}`);
+                    try {
+                        // Try multiple CORS proxies in case one fails
+                        const proxyUrls = [
+                            `https://api.allorigins.win/raw?url=${encodeURIComponent(urls[i])}`,
+                            `https://corsproxy.io/?${encodeURIComponent(urls[i])}`,
+                            `https://cors-anywhere.herokuapp.com/${urls[i]}`
+                        ];
+
+                        let blob = null;
+                        let proxyError = null;
+
+                        // Try each proxy until one works
+                        for (const proxyUrl of proxyUrls) {
+                            try {
+                                const response = await fetch(proxyUrl);
+                                if (response.ok) {
+                                    blob = await response.blob();
+                                    break;
+                                }
+                            } catch (e) {
+                                proxyError = e;
+                                continue;
+                            }
+                        }
+
+                        if (!blob) {
+                            throw proxyError || new Error('All proxies failed');
+                        }
+
+                        const imgUrl = URL.createObjectURL(blob);
+                        images.push(imgUrl);
+                        logMessage(`Downloaded page ${i + 1}`);
+                    } catch (error) {
+                        logMessage(`Error downloading page ${i + 1}: ${error.message}`);
+                        throw error;
+                    }
+                }
+
+                updateProgress(95, 'Creating PDF...');
+                logMessage('Creating PDF...');
+
+                // Create PDF
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                for (let i = 0; i < images.length; i++) {
+                    if (i > 0) doc.addPage();
+                    
+                    // Create temporary image element to get dimensions
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = images[i];
+                    });
+
+                    // Calculate dimensions to fit page
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    const imgRatio = img.width / img.height;
+                    const pageRatio = pageWidth / pageHeight;
+                    
+                    let width = pageWidth;
+                    let height = width / imgRatio;
+                    
+                    if (height > pageHeight) {
+                        height = pageHeight;
+                        width = height * imgRatio;
+                    }
+                    
+                    const x = (pageWidth - width) / 2;
+                    const y = (pageHeight - height) / 2;
+                    
+                    doc.addImage(img, 'JPEG', x, y, width, height);
+                }
+
+                updateProgress(100, 'Download complete!');
+                logMessage('Download complete!');
+
+                // Save PDF
+                doc.save(title + '.pdf');
+
+                // Cleanup
+                images.forEach(URL.revokeObjectURL);
 
             } catch (error) {
                 logMessage('Error: ' + error.message);
+                updateProgress(0, 'Error: ' + error.message);
+                logMessage('If automatic download fails, click the "Manual Download" button below.');
+                
+                // Show manual download button
+                const manualBtn = document.createElement('button');
+                manualBtn.className = 'btn btn-warning mt-3';
+                manualBtn.textContent = 'Try Manual Download';
+                manualBtn.onclick = () => {
+                    const urls = input.match(/urls = '''([\s\S]*?)'''/)[1].trim().split('\n');
+                    urls.forEach((url, index) => {
+                        window.open(url, '_blank');
+                    });
+                    logMessage('Manual download: All pages opened in new tabs');
+                    logMessage('1. Save each image (right-click -> Save Image As...)');
+                    logMessage('2. Use a PDF tool to combine the images');
+                };
+                document.querySelector('.card-body').appendChild(manualBtn);
             }
         }
     </script>
