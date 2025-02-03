@@ -199,7 +199,6 @@ title="${spl[spl.length-1]}"
         }
 
         async function combineImageChunks(images) {
-            // Group images into pages (6 chunks per page)
             const CHUNKS_PER_PAGE = 6;
             const pages = [];
             for (let i = 0; i < images.length; i += CHUNKS_PER_PAGE) {
@@ -210,16 +209,17 @@ title="${spl[spl.length-1]}"
             logMessage(`Grouped into ${pages.length} pages`);
             
             const combinedPages = [];
+            const failedPages = [];
             
             for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
                 const pageChunks = pages[pageIndex];
                 logMessage(`Processing page ${pageIndex + 1} with ${pageChunks.length} chunks`);
                 
-                // Try to process the page multiple times if it fails
                 const MAX_PAGE_RETRIES = 3;
+                let success = false;
                 let lastError = null;
                 
-                for (let pageAttempt = 1; pageAttempt <= MAX_PAGE_RETRIES; pageAttempt++) {
+                for (let pageAttempt = 1; pageAttempt <= MAX_PAGE_RETRIES && !success; pageAttempt++) {
                     try {
                         // Load all images for this page with individual retries
                         const loadedImages = [];
@@ -278,9 +278,9 @@ title="${spl[spl.length-1]}"
                         }
                         
                         const combinedUrl = URL.createObjectURL(blob);
-                        combinedPages.push(combinedUrl);
+                        combinedPages.push({ url: combinedUrl, pageNum: pageIndex + 1 });
                         logMessage(`Successfully combined page ${pageIndex + 1}`);
-                        break; // Success, move to next page
+                        success = true;
                         
                     } catch (error) {
                         lastError = error;
@@ -288,18 +288,29 @@ title="${spl[spl.length-1]}"
                         
                         if (pageAttempt < MAX_PAGE_RETRIES) {
                             logMessage(`Retrying entire page ${pageIndex + 1} (attempt ${pageAttempt + 1}/${MAX_PAGE_RETRIES})`);
-                            await sleep(pageAttempt * 2000); // Increasing delay between retries
-                        } else {
-                            throw new Error(`Failed to process page ${pageIndex + 1} after ${MAX_PAGE_RETRIES} attempts`);
+                            await sleep(pageAttempt * 2000);
                         }
                     }
                 }
+                
+                if (!success) {
+                    failedPages.push(pageIndex + 1);
+                    logMessage(`Failed to process page ${pageIndex + 1} after all attempts`);
+                }
             }
             
-            return combinedPages;
+            if (failedPages.length > 0) {
+                logMessage(`Warning: Failed to process ${failedPages.length} pages: ${failedPages.join(', ')}`);
+                if (combinedPages.length === 0) {
+                    throw new Error('Failed to process any pages successfully');
+                }
+            }
+            
+            return { combinedPages, failedPages };
         }
 
-        async function createPDFWithRetry(fullPages, title) {
+        async function createPDFWithRetry(pagesData, title) {
+            const { combinedPages, failedPages } = pagesData;
             const MAX_RETRIES = 3;
             let lastError = null;
 
@@ -312,13 +323,13 @@ title="${spl[spl.length-1]}"
 
                     const doc = new jsPDF();
                     
-                    for (let i = 0; i < fullPages.length; i++) {
-                        updateProgress(90 + (i / fullPages.length) * 10, `Adding page ${i + 1} to PDF...`);
+                    for (let i = 0; i < combinedPages.length; i++) {
+                        const { url, pageNum } = combinedPages[i];
+                        updateProgress(90 + (i / combinedPages.length) * 10, `Adding page ${pageNum} to PDF...`);
                         
                         if (i > 0) doc.addPage();
                         
-                        // Create temporary image element to get dimensions
-                        const img = await loadImageWithRetry(fullPages[i], 2);
+                        const img = await loadImageWithRetry(url, 2);
 
                         // Calculate dimensions to fit page
                         const pageWidth = doc.internal.pageSize.getWidth();
@@ -338,25 +349,51 @@ title="${spl[spl.length-1]}"
                         const y = (pageHeight - height) / 2;
                         
                         doc.addImage(img, 'JPEG', x, y, width, height);
-                        logMessage(`Added page ${i + 1} to PDF`);
+                        logMessage(`Added page ${pageNum} to PDF`);
                     }
 
-                    updateProgress(100, 'PDF creation complete!');
-                    logMessage(`PDF created successfully with ${fullPages.length} pages`);
-
-                    // Create download button
+                    // Create download buttons
+                    const container = document.createElement('div');
+                    container.className = 'mt-3';
+                    
                     const downloadBtn = document.createElement('button');
-                    downloadBtn.className = 'btn btn-success mt-3';
-                    downloadBtn.textContent = 'Download Complete PDF';
+                    downloadBtn.className = 'btn btn-success';
+                    downloadBtn.textContent = `Download PDF (${combinedPages.length} pages)`;
+                    if (failedPages.length > 0) {
+                        downloadBtn.textContent += ` - Missing pages: ${failedPages.join(', ')}`;
+                    }
                     downloadBtn.onclick = () => {
                         try {
-                            doc.save(title + '.pdf');
+                            const filename = failedPages.length > 0 ? 
+                                `${title}_partial.pdf` : 
+                                `${title}.pdf`;
+                            doc.save(filename);
                             logMessage('PDF downloaded successfully!');
                         } catch (error) {
                             logMessage('Error saving PDF: ' + error.message);
                         }
                     };
-                    document.querySelector('.card-body').appendChild(downloadBtn);
+                    container.appendChild(downloadBtn);
+                    
+                    // Add manual download button for failed pages
+                    if (failedPages.length > 0) {
+                        const manualBtn = document.createElement('button');
+                        manualBtn.className = 'btn btn-warning ml-2';
+                        manualBtn.textContent = `Download Failed Pages (${failedPages.length})`;
+                        manualBtn.onclick = () => {
+                            const urls = input.match(/urls = '''([\s\S]*?)'''/)[1].trim().split('\n');
+                            failedPages.forEach(pageNum => {
+                                const startIndex = (pageNum - 1) * 6;
+                                const pageUrls = urls.slice(startIndex, startIndex + 6);
+                                pageUrls.forEach(url => window.open(url, '_blank'));
+                            });
+                            logMessage('Manual download: Failed pages opened in new tabs');
+                        };
+                        container.appendChild(manualBtn);
+                    }
+                    
+                    document.querySelector('.card-body').appendChild(container);
+                    updateProgress(100, failedPages.length > 0 ? 'Partial PDF created!' : 'PDF creation complete!');
                     
                     return true;
                 } catch (error) {
@@ -495,13 +532,13 @@ title="${spl[spl.length-1]}"
                 logMessage('All chunks downloaded. Combining into full pages...');
 
                 // Combine chunks into full pages
-                const fullPages = await combineImageChunks(images);
+                const pagesData = await combineImageChunks(images);
                 
                 updateProgress(90, 'Creating PDF...');
-                logMessage(`Creating PDF with ${fullPages.length} pages...`);
+                logMessage(`Creating PDF with ${pagesData.combinedPages.length} pages...`);
 
                 // Create PDF with retry
-                await createPDFWithRetry(fullPages, title);
+                await createPDFWithRetry(pagesData, title);
 
             } catch (error) {
                 logMessage('Error: ' + error.message);
