@@ -293,12 +293,16 @@ title="${spl[spl.length-1]}"
                 }
 
                 try {
-                    // Direct download for Cloudfront URLs
+                    // Direct download for Cloudfront URLs with proper headers
                     const response = await fetch(url, {
                         headers: {
+                            'Origin': 'https://app.perusall.com',
+                            'Referer': 'https://app.perusall.com/',
                             'Cache-Control': 'no-cache',
                             'Pragma': 'no-cache'
                         },
+                        mode: 'cors',
+                        credentials: 'omit',
                         cache: 'no-store'
                     });
 
@@ -371,7 +375,9 @@ title="${spl[spl.length-1]}"
                 
                 // Small delay between batches to prevent rate limiting
                 if (batchEnd < urls.length) {
-                    const delay = consecutiveFailures > 0 ? 2000 : 500;
+                    const delay = consecutiveFailures > 0 ? 
+                        2000 : 
+                        500;
                     await sleep(delay);
                 }
             }
