@@ -261,74 +261,119 @@ title="${spl[spl.length-1]}"
                 updateProgress(95, 'Creating PDF...');
                 logMessage('Creating PDF...');
 
-                // Create PDF
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
-                
-                let pageCount = 0;
-                for (let i = 0; i < images.length; i++) {
-                    if (!images[i]) continue; // Skip failed pages
-                    
-                    if (pageCount > 0) doc.addPage();
-                    
-                    // Create temporary image element to get dimensions
-                    const img = new Image();
-                    await new Promise((resolve, reject) => {
-                        img.onload = resolve;
-                        img.onerror = reject;
-                        img.src = images[i];
-                    });
-
-                    // Calculate dimensions to fit page
-                    const pageWidth = doc.internal.pageSize.getWidth();
-                    const pageHeight = doc.internal.pageSize.getHeight();
-                    const imgRatio = img.width / img.height;
-                    const pageRatio = pageWidth / pageHeight;
-                    
-                    let width = pageWidth;
-                    let height = width / imgRatio;
-                    
-                    if (height > pageHeight) {
-                        height = pageHeight;
-                        width = height * imgRatio;
+                try {
+                    // Create PDF
+                    const { jsPDF } = window.jspdf;
+                    if (!jsPDF) {
+                        throw new Error('PDF library not loaded. Please refresh the page and try again.');
                     }
+
+                    const doc = new jsPDF();
+                    let pageCount = 0;
+
+                    logMessage('Processing pages...');
+                    for (let i = 0; i < images.length; i++) {
+                        if (!images[i]) continue; // Skip failed pages
+                        
+                        if (pageCount > 0) doc.addPage();
+                        
+                        // Create temporary image element to get dimensions
+                        const img = new Image();
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = reject;
+                            img.src = images[i];
+                        });
+
+                        logMessage(`Processing page ${i + 1}...`);
+                        
+                        // Calculate dimensions to fit page
+                        const pageWidth = doc.internal.pageSize.getWidth();
+                        const pageHeight = doc.internal.pageSize.getHeight();
+                        const imgRatio = img.width / img.height;
+                        const pageRatio = pageWidth / pageHeight;
+                        
+                        let width = pageWidth;
+                        let height = width / imgRatio;
+                        
+                        if (height > pageHeight) {
+                            height = pageHeight;
+                            width = height * imgRatio;
+                        }
+                        
+                        const x = (pageWidth - width) / 2;
+                        const y = (pageHeight - height) / 2;
+                        
+                        try {
+                            doc.addImage(img, 'JPEG', x, y, width, height);
+                            pageCount++;
+                        } catch (error) {
+                            logMessage(`Warning: Error adding page ${i + 1} to PDF: ${error.message}`);
+                        }
+                    }
+
+                    if (pageCount === 0) {
+                        throw new Error('No pages could be added to the PDF');
+                    }
+
+                    updateProgress(100, 'Download complete!');
+                    logMessage(`PDF created successfully with ${pageCount} pages`);
+                    logMessage('Starting download...');
+
+                    // Create download button
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'btn btn-success mt-3';
+                    downloadBtn.textContent = 'Download PDF';
+                    downloadBtn.onclick = () => {
+                        try {
+                            doc.save(title + '.pdf');
+                            logMessage('PDF downloaded successfully!');
+                        } catch (error) {
+                            logMessage('Error saving PDF: ' + error.message);
+                        }
+                    };
+                    document.querySelector('.card-body').appendChild(downloadBtn);
+
+                    // Cleanup
+                    images.filter(img => img !== null).forEach(URL.revokeObjectURL);
+
+                    if (failedPages.length > 0) {
+                        // Show manual download button for failed pages
+                        const manualBtn = document.createElement('button');
+                        manualBtn.className = 'btn btn-warning mt-3 ms-2';
+                        manualBtn.textContent = 'Download Failed Pages Manually';
+                        manualBtn.onclick = () => {
+                            failedPages.forEach(pageNum => {
+                                window.open(urls[pageNum - 1], '_blank');
+                            });
+                            logMessage('Manual download: Failed pages opened in new tabs');
+                            logMessage('1. Save each image (right-click -> Save Image As...)');
+                            logMessage('2. Use a PDF tool to combine with the existing PDF');
+                        };
+                        document.querySelector('.card-body').appendChild(manualBtn);
+                    }
+
+                } catch (error) {
+                    logMessage('Error creating PDF: ' + error.message);
+                    updateProgress(0, 'Error: ' + error.message);
                     
-                    const x = (pageWidth - width) / 2;
-                    const y = (pageHeight - height) / 2;
-                    
-                    doc.addImage(img, 'JPEG', x, y, width, height);
-                    pageCount++;
-                }
-
-                updateProgress(100, 'Download complete!');
-                logMessage('Download complete!');
-
-                // Save PDF
-                doc.save(title + '.pdf');
-
-                // Cleanup
-                images.filter(img => img !== null).forEach(URL.revokeObjectURL);
-
-                if (failedPages.length > 0) {
-                    // Show manual download button for failed pages only
+                    // Show manual download button for all pages
                     const manualBtn = document.createElement('button');
                     manualBtn.className = 'btn btn-warning mt-3';
-                    manualBtn.textContent = 'Download Failed Pages Manually';
+                    manualBtn.textContent = 'Try Manual Download';
                     manualBtn.onclick = () => {
-                        failedPages.forEach(pageNum => {
-                            window.open(urls[pageNum - 1], '_blank');
+                        urls.forEach((url, index) => {
+                            window.open(url, '_blank');
                         });
-                        logMessage('Manual download: Failed pages opened in new tabs');
+                        logMessage('Manual download: All pages opened in new tabs');
                         logMessage('1. Save each image (right-click -> Save Image As...)');
-                        logMessage('2. Use a PDF tool to combine with the existing PDF');
+                        logMessage('2. Use a PDF tool to combine the images');
                     };
                     document.querySelector('.card-body').appendChild(manualBtn);
                 }
-
             } catch (error) {
                 logMessage('Error: ' + error.message);
                 updateProgress(0, 'Error: ' + error.message);
-                logMessage('If automatic download fails, click the "Manual Download" button below.');
                 
                 // Show manual download button for all pages
                 const manualBtn = document.createElement('button');
