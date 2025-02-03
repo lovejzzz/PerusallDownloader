@@ -170,6 +170,80 @@ title="${spl[spl.length-1]}"
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        async function combineImageChunks(imageUrls) {
+            // Create a canvas to combine images
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Load all images first
+            const loadImage = (url) => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = url;
+                });
+            };
+
+            // Group chunks by page number (every 6 chunks is typically one page)
+            const CHUNKS_PER_PAGE = 6;
+            const pages = [];
+            let currentPage = [];
+
+            for (let i = 0; i < imageUrls.length; i++) {
+                if (imageUrls[i]) {
+                    currentPage.push(imageUrls[i]);
+                }
+                
+                if (currentPage.length === CHUNKS_PER_PAGE || i === imageUrls.length - 1) {
+                    if (currentPage.length > 0) {
+                        pages.push(currentPage);
+                    }
+                    currentPage = [];
+                }
+            }
+
+            // Process each page
+            const combinedPages = [];
+            for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+                const chunks = pages[pageIndex];
+                
+                // Load all images for this page
+                const images = await Promise.all(chunks.map(url => loadImage(url)));
+                
+                // Calculate total height and maximum width
+                let totalHeight = 0;
+                let maxWidth = 0;
+                images.forEach(img => {
+                    totalHeight += img.height;
+                    maxWidth = Math.max(maxWidth, img.width);
+                });
+
+                // Set canvas size
+                canvas.width = maxWidth;
+                canvas.height = totalHeight;
+                
+                // Clear canvas
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw images
+                let y = 0;
+                for (const img of images) {
+                    // Center image horizontally
+                    const x = (maxWidth - img.width) / 2;
+                    ctx.drawImage(img, x, y);
+                    y += img.height;
+                }
+
+                // Convert to data URL
+                const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
+                combinedPages.push(dataUrl);
+            }
+
+            return combinedPages;
+        }
+
         async function downloadArticle() {
             const input = document.getElementById('inputArea').value;
             if (!input) {
@@ -198,7 +272,7 @@ title="${spl[spl.length-1]}"
                 const MAX_RETRIES = 3;
                 
                 for (let i = 0; i < urls.length; i++) {
-                    updateProgress((i / urls.length) * 90, `Downloading page ${i + 1} of ${urls.length}`);
+                    updateProgress((i / urls.length) * 60, `Downloading chunk ${i + 1} of ${urls.length}`);
                     
                     // Add a small delay between requests to avoid rate limits
                     if (i > 0) {
@@ -211,7 +285,7 @@ title="${spl[spl.length-1]}"
                     // Try multiple times for each page
                     for (let retry = 0; retry < MAX_RETRIES && !success; retry++) {
                         if (retry > 0) {
-                            logMessage(`Retrying page ${i + 1} (attempt ${retry + 1} of ${MAX_RETRIES})...`);
+                            logMessage(`Retrying chunk ${i + 1} (attempt ${retry + 1} of ${MAX_RETRIES})...`);
                             await sleep(2000 * retry); // Increasing delay for each retry
                         }
 
@@ -241,7 +315,7 @@ title="${spl[spl.length-1]}"
                                     if (blob.size > 0) {
                                         const imgUrl = URL.createObjectURL(blob);
                                         images.push(imgUrl);
-                                        logMessage(`Downloaded page ${i + 1}`);
+                                        logMessage(`Downloaded chunk ${i + 1}`);
                                         success = true;
                                         break;
                                     }
@@ -255,18 +329,24 @@ title="${spl[spl.length-1]}"
                     }
 
                     if (!success) {
-                        logMessage(`Failed to download page ${i + 1} after all attempts`);
+                        logMessage(`Failed to download chunk ${i + 1} after all attempts`);
                         failedPages.push(i + 1);
                         images.push(null);
                     }
                 }
 
                 if (failedPages.length > 0) {
-                    throw new Error(`Could not download all pages. Failed pages: ${failedPages.join(', ')}`);
+                    throw new Error(`Could not download all chunks. Failed chunks: ${failedPages.join(', ')}`);
                 }
 
-                updateProgress(95, 'Creating PDF...');
-                logMessage('All pages downloaded successfully. Creating PDF...');
+                updateProgress(70, 'Combining image chunks into pages...');
+                logMessage('All chunks downloaded. Combining into full pages...');
+
+                // Combine chunks into full pages
+                const fullPages = await combineImageChunks(images);
+                
+                updateProgress(90, 'Creating PDF...');
+                logMessage(`Creating PDF with ${fullPages.length} pages...`);
 
                 // Create PDF
                 const { jsPDF } = window.jspdf;
@@ -276,7 +356,7 @@ title="${spl[spl.length-1]}"
 
                 const doc = new jsPDF();
                 
-                for (let i = 0; i < images.length; i++) {
+                for (let i = 0; i < fullPages.length; i++) {
                     if (i > 0) doc.addPage();
                     
                     // Create temporary image element to get dimensions
@@ -284,7 +364,7 @@ title="${spl[spl.length-1]}"
                     await new Promise((resolve, reject) => {
                         img.onload = resolve;
                         img.onerror = reject;
-                        img.src = images[i];
+                        img.src = fullPages[i];
                     });
 
                     // Calculate dimensions to fit page
@@ -308,7 +388,7 @@ title="${spl[spl.length-1]}"
                 }
 
                 updateProgress(100, 'Download complete!');
-                logMessage(`PDF created successfully with ${images.length} pages`);
+                logMessage(`PDF created successfully with ${fullPages.length} full pages`);
                 logMessage('Starting download...');
 
                 // Create download button
