@@ -170,7 +170,26 @@ title="${spl[spl.length-1]}"
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        async function loadImageWithRetry(url, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const img = await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = (e) => reject(new Error(`Failed to load image: ${e.message || 'Unknown error'}`));
+                        img.src = url;
+                    });
+                    return img;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await sleep(1000 * (i + 1));
+                    logMessage(`Retrying image load attempt ${i + 2}/${retries}...`);
+                }
+            }
+        }
+
         async function combineImageChunks(imageUrls) {
+            const blobs = []; // Keep track of blobs to revoke later
             try {
                 logMessage(`Starting to combine ${imageUrls.length} chunks...`);
                 
@@ -180,16 +199,6 @@ title="${spl[spl.length-1]}"
                 if (!ctx) {
                     throw new Error('Could not get canvas context');
                 }
-                
-                // Load all images first
-                const loadImage = (url) => {
-                    return new Promise((resolve, reject) => {
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.onerror = (e) => reject(new Error(`Failed to load image: ${e.message}`));
-                        img.src = url;
-                    });
-                };
 
                 // Group chunks by page number (every 6 chunks is typically one page)
                 const CHUNKS_PER_PAGE = 6;
@@ -218,8 +227,8 @@ title="${spl[spl.length-1]}"
                     logMessage(`Processing page ${pageIndex + 1} with ${chunks.length} chunks`);
                     
                     try {
-                        // Load all images for this page
-                        const images = await Promise.all(chunks.map(url => loadImage(url)));
+                        // Load all images for this page with retry
+                        const images = await Promise.all(chunks.map(url => loadImageWithRetry(url)));
                         logMessage(`Loaded ${images.length} images for page ${pageIndex + 1}`);
                         
                         // Calculate total height and maximum width
@@ -250,8 +259,14 @@ title="${spl[spl.length-1]}"
                             y += img.height;
                         }
 
-                        // Convert to data URL
-                        const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
+                        // Convert to data URL with progressive quality reduction if needed
+                        let quality = 1.0;
+                        let dataUrl;
+                        do {
+                            dataUrl = canvas.toDataURL('image/jpeg', quality);
+                            quality -= 0.1;
+                        } while (dataUrl.length > 5000000 && quality > 0.5); // Reduce quality if data URL is too large
+
                         if (!dataUrl || !dataUrl.startsWith('data:image/jpeg')) {
                             throw new Error('Failed to create data URL for combined image');
                         }
@@ -268,6 +283,9 @@ title="${spl[spl.length-1]}"
             } catch (error) {
                 logMessage(`Error in combineImageChunks: ${error.message}`);
                 throw error;
+            } finally {
+                // Clean up blob URLs
+                blobs.forEach(URL.revokeObjectURL);
             }
         }
 
@@ -278,6 +296,7 @@ title="${spl[spl.length-1]}"
                 return;
             }
 
+            const blobUrls = []; // Keep track of blob URLs
             try {
                 // Parse input
                 const urlsMatch = input.match(/urls = '''([\s\S]*?)'''/);
@@ -341,6 +360,7 @@ title="${spl[spl.length-1]}"
                                     const blob = await response.blob();
                                     if (blob.size > 0) {
                                         const imgUrl = URL.createObjectURL(blob);
+                                        blobUrls.push(imgUrl); // Track the blob URL
                                         images.push(imgUrl);
                                         logMessage(`Downloaded chunk ${i + 1}`);
                                         success = true;
@@ -387,12 +407,7 @@ title="${spl[spl.length-1]}"
                     if (i > 0) doc.addPage();
                     
                     // Create temporary image element to get dimensions
-                    const img = new Image();
-                    await new Promise((resolve, reject) => {
-                        img.onload = resolve;
-                        img.onerror = reject;
-                        img.src = fullPages[i];
-                    });
+                    const img = await loadImageWithRetry(fullPages[i]);
 
                     // Calculate dimensions to fit page
                     const pageWidth = doc.internal.pageSize.getWidth();
@@ -432,9 +447,6 @@ title="${spl[spl.length-1]}"
                 };
                 document.querySelector('.card-body').appendChild(downloadBtn);
 
-                // Cleanup
-                images.filter(img => img !== null).forEach(URL.revokeObjectURL);
-
             } catch (error) {
                 logMessage('Error: ' + error.message);
                 updateProgress(0, 'Error: ' + error.message);
@@ -453,6 +465,9 @@ title="${spl[spl.length-1]}"
                     logMessage('2. Use a PDF tool to combine the images');
                 };
                 document.querySelector('.card-body').appendChild(manualBtn);
+            } finally {
+                // Clean up blob URLs
+                blobUrls.forEach(URL.revokeObjectURL);
             }
         }
     </script>
