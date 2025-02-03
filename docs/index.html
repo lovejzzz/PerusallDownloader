@@ -255,9 +255,7 @@ title="${spl[spl.length-1]}"
 
                 if (failedPages.length > 0) {
                     logMessage(`Warning: Failed to download pages: ${failedPages.join(', ')}`);
-                    if (!confirm('Some pages failed to download. Would you like to continue creating the PDF with the successfully downloaded pages?')) {
-                        throw new Error('Download cancelled by user');
-                    }
+                    logMessage('Continuing with successfully downloaded pages...');
                 }
 
                 updateProgress(95, 'Creating PDF...');
