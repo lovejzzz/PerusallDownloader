@@ -201,6 +201,80 @@ title="${spl[spl.length-1]}"
             throw lastError;
         }
 
+        async function tryFetchWithDataUrl(url) {
+            try {
+                // Create a temporary link to open in new tab
+                const tempLink = document.createElement('a');
+                tempLink.href = url;
+                tempLink.target = '_blank';
+                
+                // Show instructions to user
+                logMessage('Direct download required for this chunk. Please:');
+                logMessage('1. A new tab will open. Right-click the image and select "Copy Image"');
+                logMessage('2. Return to this tab and paste the image when prompted');
+                logMessage('3. Press OK to continue after pasting');
+                
+                // Open URL in new tab
+                tempLink.click();
+                
+                // Create paste area
+                const pasteArea = document.createElement('div');
+                pasteArea.contentEditable = true;
+                pasteArea.style.position = 'fixed';
+                pasteArea.style.top = '50%';
+                pasteArea.style.left = '50%';
+                pasteArea.style.transform = 'translate(-50%, -50%)';
+                pasteArea.style.width = '300px';
+                pasteArea.style.height = '100px';
+                pasteArea.style.border = '2px dashed #007bff';
+                pasteArea.style.padding = '10px';
+                pasteArea.style.backgroundColor = 'white';
+                pasteArea.style.zIndex = '1000';
+                pasteArea.innerHTML = 'Paste image here (Ctrl+V or Cmd+V)';
+                
+                document.body.appendChild(pasteArea);
+                pasteArea.focus();
+                
+                // Wait for paste
+                const dataUrl = await new Promise((resolve, reject) => {
+                    let timeoutId = setTimeout(() => {
+                        document.body.removeChild(pasteArea);
+                        reject(new Error('Paste timeout'));
+                    }, 60000);
+                    
+                    pasteArea.addEventListener('paste', async (e) => {
+                        e.preventDefault();
+                        const items = (e.clipboardData || window.clipboardData).items;
+                        let blob = null;
+                        
+                        for (const item of items) {
+                            if (item.type.indexOf('image') !== -1) {
+                                blob = item.getAsFile();
+                                break;
+                            }
+                        }
+                        
+                        if (blob) {
+                            clearTimeout(timeoutId);
+                            document.body.removeChild(pasteArea);
+                            
+                            // Convert blob to data URL
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.onerror = () => reject(new Error('Failed to read pasted image'));
+                            reader.readAsDataURL(blob);
+                        } else {
+                            reject(new Error('No image found in clipboard'));
+                        }
+                    });
+                });
+                
+                return dataUrl;
+            } catch (error) {
+                throw new Error(`Data URL fallback failed: ${error.message}`);
+            }
+        }
+
         async function downloadChunk(url, index, blobUrls) {
             // Check cache first
             if (chunkCache.has(url)) {
@@ -208,28 +282,40 @@ title="${spl[spl.length-1]}"
                 return chunkCache.get(url);
             }
 
-            const MAX_RETRIES = 5; // Increased from 3 to 5
+            const MAX_RETRIES = 5;
             let lastError = null;
+
+            // List of CORS proxies to try
+            const proxyUrls = [
+                // Primary proxies
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                `https://cors.bridged.cc/${url}`,
+                // Backup proxies
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+                `https://cors-anywhere.herokuapp.com/${url}`,
+                `https://crossorigin.me/${url}`,
+                `https://yacdn.org/proxy/${url}`,
+                // Additional proxies
+                `https://proxy.cors.sh/${url}`,
+                `https://cors.eu.org/${url}`,
+                `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(url)}`,
+                `https://thingproxy.freeboard.io/fetch/${url}`,
+                `https://api.scraperapi.com/?url=${encodeURIComponent(url)}`,
+                // Add more proxies as needed
+            ];
 
             for (let retry = 0; retry < MAX_RETRIES; retry++) {
                 if (retry > 0) {
-                    const delay = Math.min(retry * 2000, 10000); // Exponential backoff with max 10s
+                    const delay = Math.min(retry * 2000, 10000);
                     logMessage(`Retrying chunk ${index + 1} (attempt ${retry + 1}/${MAX_RETRIES}) after ${delay/1000}s delay...`);
                     await sleep(delay);
                 }
 
-                // Randomize proxy order for each attempt
-                const proxyUrls = [
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    `https://cors.bridged.cc/${url}`,
-                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-                    `https://cors-anywhere.herokuapp.com/${url}`,
-                    `https://crossorigin.me/${url}`,
-                    `https://yacdn.org/proxy/${url}`
-                ].sort(() => Math.random() - 0.5);
+                // Randomize proxy order
+                const shuffledProxies = [...proxyUrls].sort(() => Math.random() - 0.5);
 
-                for (const proxyUrl of proxyUrls) {
+                for (const proxyUrl of shuffledProxies) {
                     try {
                         const response = await fetch(proxyUrl, {
                             headers: {
@@ -250,7 +336,6 @@ title="${spl[spl.length-1]}"
                                 // Verify the image loads before caching
                                 try {
                                     const img = await loadImageWithRetry(imgUrl, 2);
-                                    // Cache the successful result
                                     chunkCache.set(url, imgUrl);
                                     logMessage(`Downloaded and cached chunk ${index + 1}`);
                                     return imgUrl;
@@ -267,7 +352,15 @@ title="${spl[spl.length-1]}"
                 }
             }
 
-            throw new Error(`Failed to download chunk ${index + 1}: ${lastError?.message || 'Unknown error'}`);
+            // If all proxies fail, try data URL approach
+            try {
+                logMessage(`All proxies failed for chunk ${index + 1}, trying manual download...`);
+                const dataUrl = await tryFetchWithDataUrl(url);
+                chunkCache.set(url, dataUrl);
+                return dataUrl;
+            } catch (error) {
+                throw new Error(`Failed to download chunk ${index + 1}: ${lastError?.message || 'Unknown error'}`);
+            }
         }
 
         async function downloadChunksInParallel(urls, blobUrls) {
