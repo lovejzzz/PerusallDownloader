@@ -143,6 +143,17 @@ title="${spl[spl.length-1]}"
     </div>
 
     <script>
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(registration => {
+                    console.log('Service Worker registered');
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+        }
+
         function copyCode() {
             const codeArea = document.getElementById('codeArea');
             navigator.clipboard.writeText(codeArea.textContent)
@@ -183,9 +194,6 @@ title="${spl[spl.length-1]}"
             const MAX_RETRIES = 5;
             let lastError = null;
 
-            // Use corsproxy.io which is more reliable
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-
             for (let retry = 0; retry < MAX_RETRIES; retry++) {
                 if (retry > 0) {
                     const delay = Math.min(retry * 2000, 10000);
@@ -194,11 +202,8 @@ title="${spl[spl.length-1]}"
                 }
 
                 try {
-                    const response = await fetch(proxyUrl, {
-                        headers: {
-                            'x-requested-with': 'XMLHttpRequest'
-                        }
-                    });
+                    // Direct fetch - service worker will handle CORS
+                    const response = await fetch(url);
 
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
@@ -226,10 +231,15 @@ title="${spl[spl.length-1]}"
         }
 
         async function downloadChunksInParallel(urls, blobUrls) {
-            const BATCH_SIZE = 3; // Very small batch size to be extra gentle
+            const BATCH_SIZE = 3; // Small batch size
             const images = new Array(urls.length).fill(null);
             const failedChunks = [];
             let consecutiveFailures = 0;
+
+            // Wait for service worker to be ready
+            if ('serviceWorker' in navigator) {
+                await navigator.serviceWorker.ready;
+            }
 
             // Process URLs in batches
             for (let i = 0; i < urls.length; i += BATCH_SIZE) {
@@ -250,18 +260,15 @@ title="${spl[spl.length-1]}"
                                 failedChunks.push(j + 1);
                                 consecutiveFailures++;
                                 
-                                // If we have too many consecutive failures, increase delay
                                 if (consecutiveFailures >= 3) {
-                                    return sleep(5000); // Add extra delay
+                                    return sleep(5000);
                                 }
                             })
                     );
                 }
 
-                // Wait for current batch to complete before starting next batch
                 await Promise.all(batchPromises);
                 
-                // Large delay between batches to avoid rate limiting
                 if (batchEnd < urls.length) {
                     const delay = consecutiveFailures > 0 ? 5000 : 2000;
                     await sleep(delay);
