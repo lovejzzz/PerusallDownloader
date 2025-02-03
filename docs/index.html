@@ -174,105 +174,25 @@ title="${spl[spl.length-1]}"
         let chunkCache = new Map();
 
         async function loadImageWithRetry(url, maxRetries = 3) {
-            let lastError = null;
-            
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    const img = new Image();
-                    await new Promise((resolve, reject) => {
-                        img.onload = () => resolve(img);
-                        img.onerror = (e) => reject(new Error('Failed to load image: ' + (e.message || 'Unknown error')));
-                        img.src = url;
-                        
-                        // Increased timeout for larger images
-                        setTimeout(() => reject(new Error('Image load timeout')), 20000);
-                    });
-                    return img;
-                } catch (error) {
-                    lastError = error;
-                    if (attempt < maxRetries) {
-                        const delay = Math.min(attempt * 2000, 10000);
-                        logMessage(`Retrying image load attempt ${attempt + 1}/${maxRetries} in ${delay/1000} seconds...`);
-                        await sleep(delay);
-                    }
-                }
-            }
-            
-            throw lastError;
-        }
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                let retries = 0;
 
-        async function tryFetchWithDataUrl(url) {
-            try {
-                // Create a temporary link to open in new tab
-                const tempLink = document.createElement('a');
-                tempLink.href = url;
-                tempLink.target = '_blank';
-                
-                // Show instructions to user
-                logMessage('Direct download required for this chunk. Please:');
-                logMessage('1. A new tab will open. Right-click the image and select "Copy Image"');
-                logMessage('2. Return to this tab and paste the image when prompted');
-                logMessage('3. Press OK to continue after pasting');
-                
-                // Open URL in new tab
-                tempLink.click();
-                
-                // Create paste area
-                const pasteArea = document.createElement('div');
-                pasteArea.contentEditable = true;
-                pasteArea.style.position = 'fixed';
-                pasteArea.style.top = '50%';
-                pasteArea.style.left = '50%';
-                pasteArea.style.transform = 'translate(-50%, -50%)';
-                pasteArea.style.width = '300px';
-                pasteArea.style.height = '100px';
-                pasteArea.style.border = '2px dashed #007bff';
-                pasteArea.style.padding = '10px';
-                pasteArea.style.backgroundColor = 'white';
-                pasteArea.style.zIndex = '1000';
-                pasteArea.innerHTML = 'Paste image here (Ctrl+V or Cmd+V)';
-                
-                document.body.appendChild(pasteArea);
-                pasteArea.focus();
-                
-                // Wait for paste
-                const dataUrl = await new Promise((resolve, reject) => {
-                    let timeoutId = setTimeout(() => {
-                        document.body.removeChild(pasteArea);
-                        reject(new Error('Paste timeout'));
-                    }, 60000);
-                    
-                    pasteArea.addEventListener('paste', async (e) => {
-                        e.preventDefault();
-                        const items = (e.clipboardData || window.clipboardData).items;
-                        let blob = null;
-                        
-                        for (const item of items) {
-                            if (item.type.indexOf('image') !== -1) {
-                                blob = item.getAsFile();
-                                break;
-                            }
-                        }
-                        
-                        if (blob) {
-                            clearTimeout(timeoutId);
-                            document.body.removeChild(pasteArea);
-                            
-                            // Convert blob to data URL
-                            const reader = new FileReader();
-                            reader.onloadend = () => resolve(reader.result);
-                            reader.onerror = () => reject(new Error('Failed to read pasted image'));
-                            reader.readAsDataURL(blob);
+                const tryLoad = () => {
+                    img.onload = () => resolve(img);
+                    img.onerror = () => {
+                        retries++;
+                        if (retries < maxRetries) {
+                            setTimeout(tryLoad, retries * 2000);
                         } else {
-                            reject(new Error('No image found in clipboard'));
+                            reject(new Error('Failed to load image'));
                         }
-                    });
-                });
-                
-                return dataUrl;
-            } catch (error) {
-                throw new Error(`Data URL fallback failed: ${error.message}`);
-            }
+                    };
+                    img.src = url;
+                };
+
+                tryLoad();
+            });
         }
 
         async function downloadChunk(url, index, blobUrls) {
@@ -293,39 +213,33 @@ title="${spl[spl.length-1]}"
                 }
 
                 try {
-                    // Direct download for Cloudfront URLs with proper headers
-                    const response = await fetch(url, {
-                        headers: {
-                            'Origin': 'https://app.perusall.com',
-                            'Referer': 'https://app.perusall.com/',
-                            'Cache-Control': 'no-cache',
-                            'Pragma': 'no-cache'
-                        },
-                        mode: 'cors',
-                        credentials: 'omit',
-                        cache: 'no-store'
-                    });
-
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        if (blob.size > 0) {
-                            const imgUrl = URL.createObjectURL(blob);
-                            blobUrls.push(imgUrl);
-                            
-                            // Verify the image loads before caching
-                            try {
-                                const img = await loadImageWithRetry(imgUrl, 2);
-                                chunkCache.set(url, imgUrl);
-                                logMessage(`Downloaded and cached chunk ${index + 1}`);
-                                return imgUrl;
-                            } catch (imgError) {
-                                URL.revokeObjectURL(imgUrl);
-                                throw imgError;
+                    // Try loading the image directly
+                    const img = await loadImageWithRetry(url, 2);
+                    
+                    // Convert the loaded image to a blob URL
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Get the blob URL
+                    const blobUrl = await new Promise((resolve, reject) => {
+                        canvas.toBlob(blob => {
+                            if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                blobUrls.push(url);
+                                resolve(url);
+                            } else {
+                                reject(new Error('Failed to create blob'));
                             }
-                        }
-                    } else {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
+                        }, 'image/png');
+                    });
+                    
+                    // Cache and return the blob URL
+                    chunkCache.set(url, blobUrl);
+                    logMessage(`Downloaded and cached chunk ${index + 1}`);
+                    return blobUrl;
                 } catch (error) {
                     lastError = error;
                     if (retry === MAX_RETRIES - 1) {
@@ -338,7 +252,7 @@ title="${spl[spl.length-1]}"
         }
 
         async function downloadChunksInParallel(urls, blobUrls) {
-            const BATCH_SIZE = 10; // Increased batch size since we're doing direct downloads
+            const BATCH_SIZE = 5; // Reduced batch size to be gentler
             const images = new Array(urls.length).fill(null);
             const failedChunks = [];
             let consecutiveFailures = 0;
@@ -373,11 +287,11 @@ title="${spl[spl.length-1]}"
                 // Wait for current batch to complete before starting next batch
                 await Promise.all(batchPromises);
                 
-                // Small delay between batches to prevent rate limiting
+                // Larger delay between batches to be gentler on the server
                 if (batchEnd < urls.length) {
                     const delay = consecutiveFailures > 0 ? 
-                        2000 : 
-                        500;
+                        3000 : // 3 second delay if there were failures
+                        1000;  // 1 second delay if all successful
                     await sleep(delay);
                 }
             }
