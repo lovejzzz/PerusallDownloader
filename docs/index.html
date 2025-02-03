@@ -192,185 +192,142 @@ title="${spl[spl.length-1]}"
                 updateProgress(0, 'Starting download...');
                 logMessage('Starting download of ' + title);
 
-                // Download all images using CORS proxy
+                // Download all images using CORS proxy with retries
                 const images = [];
                 const failedPages = [];
+                const MAX_RETRIES = 3;
                 
                 for (let i = 0; i < urls.length; i++) {
                     updateProgress((i / urls.length) * 90, `Downloading page ${i + 1} of ${urls.length}`);
-                    try {
-                        // Add a small delay between requests to avoid rate limits
-                        if (i > 0) {
-                            await sleep(1000); // 1 second delay between requests
+                    
+                    // Add a small delay between requests to avoid rate limits
+                    if (i > 0) {
+                        await sleep(1500); // 1.5 second delay between requests
+                    }
+
+                    let success = false;
+                    let lastError = null;
+                    
+                    // Try multiple times for each page
+                    for (let retry = 0; retry < MAX_RETRIES && !success; retry++) {
+                        if (retry > 0) {
+                            logMessage(`Retrying page ${i + 1} (attempt ${retry + 1} of ${MAX_RETRIES})...`);
+                            await sleep(2000 * retry); // Increasing delay for each retry
                         }
 
-                        // Try multiple CORS proxies in case one fails
+                        // List of CORS proxies to try
                         const proxyUrls = [
                             `https://api.allorigins.win/raw?url=${encodeURIComponent(urls[i])}`,
                             `https://corsproxy.io/?${encodeURIComponent(urls[i])}`,
                             `https://cors.bridged.cc/${urls[i]}`,
-                            `https://cors-anywhere.herokuapp.com/${urls[i]}`
+                            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urls[i])}`,
+                            `https://cors-anywhere.herokuapp.com/${urls[i]}`,
+                            `https://crossorigin.me/${urls[i]}`,
+                            `https://yacdn.org/proxy/${urls[i]}`
                         ];
 
-                        let blob = null;
-                        let proxyError = null;
-
-                        // Try each proxy until one works
+                        // Try each proxy for this attempt
                         for (const proxyUrl of proxyUrls) {
                             try {
                                 const response = await fetch(proxyUrl, {
                                     headers: {
                                         'Origin': 'https://lovejzzz.github.io'
-                                    }
+                                    },
+                                    mode: 'cors'
                                 });
+
                                 if (response.ok) {
-                                    blob = await response.blob();
-                                    break;
+                                    const blob = await response.blob();
+                                    if (blob.size > 0) {
+                                        const imgUrl = URL.createObjectURL(blob);
+                                        images.push(imgUrl);
+                                        logMessage(`Downloaded page ${i + 1}`);
+                                        success = true;
+                                        break;
+                                    }
                                 }
-                                await sleep(500); // 0.5 second delay between proxy attempts
-                            } catch (e) {
-                                proxyError = e;
+                            } catch (error) {
+                                lastError = error;
+                                await sleep(500); // Wait 0.5 seconds before trying next proxy
                                 continue;
                             }
                         }
+                    }
 
-                        if (!blob) {
-                            throw proxyError || new Error('All proxies failed');
-                        }
-
-                        const imgUrl = URL.createObjectURL(blob);
-                        images.push(imgUrl);
-                        logMessage(`Downloaded page ${i + 1}`);
-                    } catch (error) {
-                        logMessage(`Error downloading page ${i + 1}: ${error.message}`);
+                    if (!success) {
+                        logMessage(`Failed to download page ${i + 1} after all attempts`);
                         failedPages.push(i + 1);
-                        // Continue with other pages instead of stopping
                         images.push(null);
                     }
                 }
 
-                if (images.length === 0) {
-                    throw new Error('No pages were downloaded successfully');
-                }
-
                 if (failedPages.length > 0) {
-                    logMessage(`Warning: Failed to download pages: ${failedPages.join(', ')}`);
-                    logMessage('Continuing with successfully downloaded pages...');
+                    throw new Error(`Could not download all pages. Failed pages: ${failedPages.join(', ')}`);
                 }
 
                 updateProgress(95, 'Creating PDF...');
-                logMessage('Creating PDF...');
+                logMessage('All pages downloaded successfully. Creating PDF...');
 
-                try {
-                    // Create PDF
-                    const { jsPDF } = window.jspdf;
-                    if (!jsPDF) {
-                        throw new Error('PDF library not loaded. Please refresh the page and try again.');
-                    }
-
-                    const doc = new jsPDF();
-                    let pageCount = 0;
-
-                    logMessage('Processing pages...');
-                    for (let i = 0; i < images.length; i++) {
-                        if (!images[i]) continue; // Skip failed pages
-                        
-                        if (pageCount > 0) doc.addPage();
-                        
-                        // Create temporary image element to get dimensions
-                        const img = new Image();
-                        await new Promise((resolve, reject) => {
-                            img.onload = resolve;
-                            img.onerror = reject;
-                            img.src = images[i];
-                        });
-
-                        logMessage(`Processing page ${i + 1}...`);
-                        
-                        // Calculate dimensions to fit page
-                        const pageWidth = doc.internal.pageSize.getWidth();
-                        const pageHeight = doc.internal.pageSize.getHeight();
-                        const imgRatio = img.width / img.height;
-                        const pageRatio = pageWidth / pageHeight;
-                        
-                        let width = pageWidth;
-                        let height = width / imgRatio;
-                        
-                        if (height > pageHeight) {
-                            height = pageHeight;
-                            width = height * imgRatio;
-                        }
-                        
-                        const x = (pageWidth - width) / 2;
-                        const y = (pageHeight - height) / 2;
-                        
-                        try {
-                            doc.addImage(img, 'JPEG', x, y, width, height);
-                            pageCount++;
-                        } catch (error) {
-                            logMessage(`Warning: Error adding page ${i + 1} to PDF: ${error.message}`);
-                        }
-                    }
-
-                    if (pageCount === 0) {
-                        throw new Error('No pages could be added to the PDF');
-                    }
-
-                    updateProgress(100, 'Download complete!');
-                    logMessage(`PDF created successfully with ${pageCount} pages`);
-                    logMessage('Starting download...');
-
-                    // Create download button
-                    const downloadBtn = document.createElement('button');
-                    downloadBtn.className = 'btn btn-success mt-3';
-                    downloadBtn.textContent = 'Download PDF';
-                    downloadBtn.onclick = () => {
-                        try {
-                            doc.save(title + '.pdf');
-                            logMessage('PDF downloaded successfully!');
-                        } catch (error) {
-                            logMessage('Error saving PDF: ' + error.message);
-                        }
-                    };
-                    document.querySelector('.card-body').appendChild(downloadBtn);
-
-                    // Cleanup
-                    images.filter(img => img !== null).forEach(URL.revokeObjectURL);
-
-                    if (failedPages.length > 0) {
-                        // Show manual download button for failed pages
-                        const manualBtn = document.createElement('button');
-                        manualBtn.className = 'btn btn-warning mt-3 ms-2';
-                        manualBtn.textContent = 'Download Failed Pages Manually';
-                        manualBtn.onclick = () => {
-                            failedPages.forEach(pageNum => {
-                                window.open(urls[pageNum - 1], '_blank');
-                            });
-                            logMessage('Manual download: Failed pages opened in new tabs');
-                            logMessage('1. Save each image (right-click -> Save Image As...)');
-                            logMessage('2. Use a PDF tool to combine with the existing PDF');
-                        };
-                        document.querySelector('.card-body').appendChild(manualBtn);
-                    }
-
-                } catch (error) {
-                    logMessage('Error creating PDF: ' + error.message);
-                    updateProgress(0, 'Error: ' + error.message);
-                    
-                    // Show manual download button for all pages
-                    const manualBtn = document.createElement('button');
-                    manualBtn.className = 'btn btn-warning mt-3';
-                    manualBtn.textContent = 'Try Manual Download';
-                    manualBtn.onclick = () => {
-                        urls.forEach((url, index) => {
-                            window.open(url, '_blank');
-                        });
-                        logMessage('Manual download: All pages opened in new tabs');
-                        logMessage('1. Save each image (right-click -> Save Image As...)');
-                        logMessage('2. Use a PDF tool to combine the images');
-                    };
-                    document.querySelector('.card-body').appendChild(manualBtn);
+                // Create PDF
+                const { jsPDF } = window.jspdf;
+                if (!jsPDF) {
+                    throw new Error('PDF library not loaded. Please refresh the page and try again.');
                 }
+
+                const doc = new jsPDF();
+                
+                for (let i = 0; i < images.length; i++) {
+                    if (i > 0) doc.addPage();
+                    
+                    // Create temporary image element to get dimensions
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = images[i];
+                    });
+
+                    // Calculate dimensions to fit page
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    const imgRatio = img.width / img.height;
+                    const pageRatio = pageWidth / pageHeight;
+                    
+                    let width = pageWidth;
+                    let height = width / imgRatio;
+                    
+                    if (height > pageHeight) {
+                        height = pageHeight;
+                        width = height * imgRatio;
+                    }
+                    
+                    const x = (pageWidth - width) / 2;
+                    const y = (pageHeight - height) / 2;
+                    
+                    doc.addImage(img, 'JPEG', x, y, width, height);
+                }
+
+                updateProgress(100, 'Download complete!');
+                logMessage(`PDF created successfully with ${images.length} pages`);
+                logMessage('Starting download...');
+
+                // Create download button
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'btn btn-success mt-3';
+                downloadBtn.textContent = 'Download Complete PDF';
+                downloadBtn.onclick = () => {
+                    try {
+                        doc.save(title + '.pdf');
+                        logMessage('PDF downloaded successfully!');
+                    } catch (error) {
+                        logMessage('Error saving PDF: ' + error.message);
+                    }
+                };
+                document.querySelector('.card-body').appendChild(downloadBtn);
+
+                // Cleanup
+                images.filter(img => img !== null).forEach(URL.revokeObjectURL);
+
             } catch (error) {
                 logMessage('Error: ' + error.message);
                 updateProgress(0, 'Error: ' + error.message);
