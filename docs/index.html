@@ -170,6 +170,9 @@ title="${spl[spl.length-1]}"
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        // Cache for downloaded chunks
+        let chunkCache = new Map();
+
         async function loadImageWithRetry(url, maxRetries = 3) {
             let lastError = null;
             
@@ -181,14 +184,14 @@ title="${spl[spl.length-1]}"
                         img.onerror = (e) => reject(new Error('Failed to load image: ' + (e.message || 'Unknown error')));
                         img.src = url;
                         
-                        // Add timeout for each attempt
-                        setTimeout(() => reject(new Error('Image load timeout')), 10000);
+                        // Increased timeout for larger images
+                        setTimeout(() => reject(new Error('Image load timeout')), 20000);
                     });
                     return img;
                 } catch (error) {
                     lastError = error;
                     if (attempt < maxRetries) {
-                        const delay = attempt * 1000;
+                        const delay = Math.min(attempt * 2000, 10000);
                         logMessage(`Retrying image load attempt ${attempt + 1}/${maxRetries} in ${delay/1000} seconds...`);
                         await sleep(delay);
                     }
@@ -196,6 +199,125 @@ title="${spl[spl.length-1]}"
             }
             
             throw lastError;
+        }
+
+        async function downloadChunk(url, index, blobUrls) {
+            // Check cache first
+            if (chunkCache.has(url)) {
+                logMessage(`Using cached version of chunk ${index + 1}`);
+                return chunkCache.get(url);
+            }
+
+            const MAX_RETRIES = 5; // Increased from 3 to 5
+            let lastError = null;
+
+            for (let retry = 0; retry < MAX_RETRIES; retry++) {
+                if (retry > 0) {
+                    const delay = Math.min(retry * 2000, 10000); // Exponential backoff with max 10s
+                    logMessage(`Retrying chunk ${index + 1} (attempt ${retry + 1}/${MAX_RETRIES}) after ${delay/1000}s delay...`);
+                    await sleep(delay);
+                }
+
+                // Randomize proxy order for each attempt
+                const proxyUrls = [
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                    `https://cors.bridged.cc/${url}`,
+                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+                    `https://cors-anywhere.herokuapp.com/${url}`,
+                    `https://crossorigin.me/${url}`,
+                    `https://yacdn.org/proxy/${url}`
+                ].sort(() => Math.random() - 0.5);
+
+                for (const proxyUrl of proxyUrls) {
+                    try {
+                        const response = await fetch(proxyUrl, {
+                            headers: {
+                                'Origin': 'https://lovejzzz.github.io',
+                                'Cache-Control': 'no-cache',
+                                'Pragma': 'no-cache'
+                            },
+                            mode: 'cors',
+                            cache: 'no-store'
+                        });
+
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            if (blob.size > 0) {
+                                const imgUrl = URL.createObjectURL(blob);
+                                blobUrls.push(imgUrl);
+                                
+                                // Verify the image loads before caching
+                                try {
+                                    const img = await loadImageWithRetry(imgUrl, 2);
+                                    // Cache the successful result
+                                    chunkCache.set(url, imgUrl);
+                                    logMessage(`Downloaded and cached chunk ${index + 1}`);
+                                    return imgUrl;
+                                } catch (imgError) {
+                                    URL.revokeObjectURL(imgUrl);
+                                    throw imgError;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        lastError = error;
+                        continue;
+                    }
+                }
+            }
+
+            throw new Error(`Failed to download chunk ${index + 1}: ${lastError?.message || 'Unknown error'}`);
+        }
+
+        async function downloadChunksInParallel(urls, blobUrls) {
+            const BATCH_SIZE = 5;
+            const images = new Array(urls.length).fill(null);
+            const failedChunks = [];
+            let consecutiveFailures = 0;
+
+            // Process URLs in batches
+            for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+                const batchEnd = Math.min(i + BATCH_SIZE, urls.length);
+                const batchPromises = [];
+
+                // Create batch of promises
+                for (let j = i; j < batchEnd; j++) {
+                    batchPromises.push(
+                        downloadChunk(urls[j], j, blobUrls)
+                            .then(imgUrl => {
+                                images[j] = imgUrl;
+                                consecutiveFailures = 0; // Reset on success
+                                updateProgress((j / urls.length) * 60, `Downloaded ${j + 1} of ${urls.length} chunks`);
+                            })
+                            .catch(error => {
+                                logMessage(`Error downloading chunk ${j + 1}: ${error.message}`);
+                                failedChunks.push(j + 1);
+                                consecutiveFailures++;
+                                
+                                // If we have too many consecutive failures, increase delay
+                                if (consecutiveFailures >= 3) {
+                                    return sleep(5000); // Add extra delay
+                                }
+                            })
+                    );
+                }
+
+                // Wait for current batch to complete before starting next batch
+                await Promise.all(batchPromises);
+                
+                // Adaptive delay between batches based on failure rate
+                const delay = consecutiveFailures > 0 ? 3000 : 1000;
+                if (batchEnd < urls.length) {
+                    await sleep(delay);
+                }
+            }
+
+            if (failedChunks.length > 0) {
+                throw new Error(`Failed to download chunks: ${failedChunks.join(', ')}`);
+            }
+
+            return images;
         }
 
         async function combineImageChunks(images) {
@@ -388,6 +510,8 @@ title="${spl[spl.length-1]}"
                                 pageUrls.forEach(url => window.open(url, '_blank'));
                             });
                             logMessage('Manual download: Failed pages opened in new tabs');
+                            logMessage('1. Save each image (right-click -> Save Image As...)');
+                            logMessage('2. Use a PDF tool to combine the images');
                         };
                         container.appendChild(manualBtn);
                     }
@@ -408,97 +532,6 @@ title="${spl[spl.length-1]}"
             }
             
             throw new Error(`Failed to create PDF after ${MAX_RETRIES} attempts: ${lastError.message}`);
-        }
-
-        async function downloadChunk(url, index, blobUrls) {
-            const MAX_RETRIES = 3;
-            let lastError = null;
-
-            for (let retry = 0; retry < MAX_RETRIES; retry++) {
-                if (retry > 0) {
-                    logMessage(`Retrying chunk ${index + 1} (attempt ${retry + 1} of ${MAX_RETRIES})...`);
-                    await sleep(1000 * retry);
-                }
-
-                // List of CORS proxies to try
-                const proxyUrls = [
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                    `https://cors.bridged.cc/${url}`,
-                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-                    `https://cors-anywhere.herokuapp.com/${url}`,
-                    `https://crossorigin.me/${url}`,
-                    `https://yacdn.org/proxy/${url}`
-                ];
-
-                for (const proxyUrl of proxyUrls) {
-                    try {
-                        const response = await fetch(proxyUrl, {
-                            headers: {
-                                'Origin': 'https://lovejzzz.github.io'
-                            },
-                            mode: 'cors'
-                        });
-
-                        if (response.ok) {
-                            const blob = await response.blob();
-                            if (blob.size > 0) {
-                                const imgUrl = URL.createObjectURL(blob);
-                                blobUrls.push(imgUrl);
-                                logMessage(`Downloaded chunk ${index + 1}`);
-                                return imgUrl;
-                            }
-                        }
-                    } catch (error) {
-                        lastError = error;
-                        await sleep(500);
-                        continue;
-                    }
-                }
-            }
-
-            throw new Error(`Failed to download chunk ${index + 1}: ${lastError?.message || 'Unknown error'}`);
-        }
-
-        async function downloadChunksInParallel(urls, blobUrls) {
-            const BATCH_SIZE = 5; // Number of parallel downloads
-            const images = new Array(urls.length).fill(null);
-            const failedChunks = [];
-
-            // Process URLs in batches
-            for (let i = 0; i < urls.length; i += BATCH_SIZE) {
-                const batchEnd = Math.min(i + BATCH_SIZE, urls.length);
-                const batchPromises = [];
-
-                // Create batch of promises
-                for (let j = i; j < batchEnd; j++) {
-                    batchPromises.push(
-                        downloadChunk(urls[j], j, blobUrls)
-                            .then(imgUrl => {
-                                images[j] = imgUrl;
-                                updateProgress((j / urls.length) * 60, `Downloaded ${j + 1} of ${urls.length} chunks`);
-                            })
-                            .catch(error => {
-                                logMessage(`Error downloading chunk ${j + 1}: ${error.message}`);
-                                failedChunks.push(j + 1);
-                            })
-                    );
-                }
-
-                // Wait for current batch to complete before starting next batch
-                await Promise.all(batchPromises);
-                
-                // Add a small delay between batches to avoid overwhelming the server
-                if (batchEnd < urls.length) {
-                    await sleep(1000);
-                }
-            }
-
-            if (failedChunks.length > 0) {
-                throw new Error(`Failed to download chunks: ${failedChunks.join(', ')}`);
-            }
-
-            return images;
         }
 
         async function downloadArticle() {
