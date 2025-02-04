@@ -76,44 +76,79 @@
                 <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
             </div>
             <div class="card-body">
-                <div class="code-area" id="codeArea">var len = 0; 
+                <div class="code-area" id="codeArea">// Load jsPDF
+var script = document.createElement('script');
+script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+document.head.appendChild(script);
+
+// Create status display
+var status = document.createElement('div');
+status.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 10px; background: #1e1e1e; color: #33ff33; border-radius: 4px; font-family: monospace; max-width: 400px; max-height: 300px; overflow-y: auto;';
+document.body.appendChild(status);
+
+function log(msg) {
+    status.innerHTML += msg + '<br>';
+    status.scrollTop = status.scrollHeight;
+    console.log(msg);
+}
+
+log('Starting download process...');
+
+var len = 0; 
 var times = 0;
-var i = setInterval(() => { 
+var i = setInterval(async () => { 
     var img = document.querySelectorAll("img.chunk"); 
     img[img.length-1].scrollIntoView(); 
     if (len < img.length) {
         len = img.length;
     } else if (times > 3) {
-        var urls = [];
-        img.forEach((e) => urls.push(e.src));
-        var spl = location.pathname.split('/');
-        console.clear();  // Clear previous output
-        
-        // Create the output text
-        var outputText = `=== START OF DOWNLOAD INFO ===
-urls = '''
-${urls.join('\n')}
-'''
-title="${spl[spl.length-1]}"
-=== END OF DOWNLOAD INFO ===`;
-
-        // Log the output
-        console.log(outputText);
-        
-        // Create and inject copy button
-        var btn = document.createElement('button');
-        btn.textContent = 'Copy Download Info';
-        btn.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
-        btn.onclick = function() {
-            navigator.clipboard.writeText(outputText)
-                .then(() => {
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy Download Info', 2000);
-                })
-                .catch(err => console.error('Failed to copy:', err));
-        };
-        document.body.appendChild(btn);
         clearInterval(i);
+        log(`Found ${img.length} pages`);
+        
+        // Wait for jsPDF to load
+        while (typeof window.jspdf === 'undefined') {
+            await new Promise(r => setTimeout(r, 100));
+        }
+        window.jsPDF = window.jspdf.jsPDF;
+        
+        try {
+            log('Creating PDF...');
+            const pdf = new jsPDF();
+            let firstPage = true;
+            
+            for (let idx = 0; idx < img.length; idx++) {
+                log(`Processing page ${idx + 1}/${img.length}`);
+                
+                // Create canvas and draw image
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = img[idx].naturalWidth;
+                canvas.height = img[idx].naturalHeight;
+                context.drawImage(img[idx], 0, 0);
+                
+                // Convert to JPEG and add to PDF
+                const imgData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                if (!firstPage) {
+                    pdf.addPage();
+                }
+                firstPage = false;
+                
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+            }
+            
+            log('Saving PDF...');
+            var spl = location.pathname.split('/');
+            pdf.save(spl[spl.length-1] + '.pdf');
+            log('Download complete! ✅');
+            
+        } catch (error) {
+            log('Error: ' + error.message);
+        }
     } else {
         times++;
     }
