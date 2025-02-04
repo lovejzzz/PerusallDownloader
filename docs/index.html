@@ -95,9 +95,52 @@ var i = setInterval(() => {
         // Group images by page number
         const pageMap = {};
         img.forEach((e) => {
-            const pageMatch = e.src.match(/page=(\\d+)/);
-            if (!pageMatch) return;
-            const pageNum = parseInt(pageMatch[1]);
+            // Debug: log the image URL
+            console.log('Image URL:', e.src);
+            
+            // Try different patterns
+            let pageNum;
+            const patterns = [
+                /page=(\d+)/, // Standard pattern
+                /page\/(\d+)/, // Alternative pattern
+                /p(\d+)\// // Another pattern
+            ];
+            
+            for (const pattern of patterns) {
+                const match = e.src.match(pattern);
+                if (match) {
+                    pageNum = parseInt(match[1]);
+                    break;
+                }
+            }
+            
+            // If no page number found, try data attributes
+            if (!pageNum) {
+                pageNum = e.getAttribute('data-page') || 
+                         e.getAttribute('data-page-number') || 
+                         e.getAttribute('page');
+                if (pageNum) pageNum = parseInt(pageNum);
+            }
+            
+            // If still no page number, try parent elements
+            if (!pageNum) {
+                const parent = e.closest('[data-page], [data-page-number], [page]');
+                if (parent) {
+                    pageNum = parent.getAttribute('data-page') || 
+                             parent.getAttribute('data-page-number') || 
+                             parent.getAttribute('page');
+                    if (pageNum) pageNum = parseInt(pageNum);
+                }
+            }
+            
+            // Debug: log the found page number
+            console.log('Found page number:', pageNum);
+            
+            if (!pageNum) {
+                console.log('No page number found for image');
+                return;
+            }
+            
             if (!pageMap[pageNum]) pageMap[pageNum] = [];
             pageMap[pageNum].push(e);
         });
@@ -105,6 +148,12 @@ var i = setInterval(() => {
         // Sort page numbers
         const sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
         console.log('Found ' + sortedPages.length + ' pages');
+        console.log('Page numbers found:', sortedPages);
+        
+        if (sortedPages.length === 0) {
+            console.error('No pages found! Please check the page number extraction logic.');
+            return;
+        }
         
         // Create PDF
         window.jsPDF = window.jspdf.jsPDF;
@@ -114,6 +163,7 @@ var i = setInterval(() => {
         for (const pageNum of sortedPages) {
             console.log('Processing page ' + pageNum);
             const chunks = pageMap[pageNum];
+            console.log('Found ' + chunks.length + ' chunks for page ' + pageNum);
             
             // Create canvas for full page
             const canvas = document.createElement('canvas');
@@ -126,6 +176,8 @@ var i = setInterval(() => {
                 totalHeight += img.naturalHeight;
                 maxWidth = Math.max(maxWidth, img.naturalWidth);
             }
+            
+            console.log('Page dimensions:', maxWidth, 'x', totalHeight);
             
             // Set canvas size
             canvas.width = maxWidth;
