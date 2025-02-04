@@ -156,26 +156,7 @@ var i = setInterval(() => {
     } else {
         times++;
     }
-}, 2000);
-        
-        // Add to PDF
-        if (!isFirstPage) pdf.addPage();
-        isFirstPage = false;
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.8);
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-    }
-
-    // Save PDF
-    log('Saving PDF...');
-    const name = location.pathname.split('/').pop();
-    pdf.save(name + '.pdf');
-    log('Done!');
-})();</div>
+}, 2000);</div>
             </div>
         </div>
 
