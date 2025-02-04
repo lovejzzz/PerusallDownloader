@@ -76,83 +76,77 @@
                 <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
             </div>
             <div class="card-body">
-                <div class="code-area" id="codeArea">// Load jsPDF
-var script = document.createElement('script');
-script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-document.head.appendChild(script);
+                <div class="code-area" id="codeArea">(async function() {
+    // Load jsPDF
+    await new Promise((resolve, reject) => {
+        var script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
 
-// Create status display
-var status = document.createElement('div');
-status.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 10px; background: #1e1e1e; color: #33ff33; border-radius: 4px; font-family: monospace; max-width: 400px; max-height: 300px; overflow-y: auto;';
-document.body.appendChild(status);
+    // Initialize status div
+    var status = document.createElement('div');
+    status.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:10px;background:#000;color:#0f0;border-radius:4px;font-family:monospace;';
+    document.body.appendChild(status);
 
-function log(msg) {
-    status.innerHTML += msg + '<br>';
-    status.scrollTop = status.scrollHeight;
-    console.log(msg);
-}
-
-log('Starting download process...');
-
-var len = 0; 
-var times = 0;
-var i = setInterval(async () => { 
-    var img = document.querySelectorAll("img.chunk"); 
-    img[img.length-1].scrollIntoView(); 
-    if (len < img.length) {
-        len = img.length;
-    } else if (times > 3) {
-        clearInterval(i);
-        log(`Found ${img.length} pages`);
-        
-        // Wait for jsPDF to load
-        while (typeof window.jspdf === 'undefined') {
-            await new Promise(r => setTimeout(r, 100));
-        }
-        window.jsPDF = window.jspdf.jsPDF;
-        
-        try {
-            log('Creating PDF...');
-            const pdf = new jsPDF();
-            let firstPage = true;
-            
-            for (let idx = 0; idx < img.length; idx++) {
-                log(`Processing page ${idx + 1}/${img.length}`);
-                
-                // Create canvas and draw image
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.width = img[idx].naturalWidth;
-                canvas.height = img[idx].naturalHeight;
-                context.drawImage(img[idx], 0, 0);
-                
-                // Convert to JPEG and add to PDF
-                const imgData = canvas.toDataURL('image/jpeg', 0.8);
-                
-                if (!firstPage) {
-                    pdf.addPage();
-                }
-                firstPage = false;
-                
-                const imgProps = pdf.getImageProperties(imgData);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                
-                pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-            }
-            
-            log('Saving PDF...');
-            var spl = location.pathname.split('/');
-            pdf.save(spl[spl.length-1] + '.pdf');
-            log('Download complete! ✅');
-            
-        } catch (error) {
-            log('Error: ' + error.message);
-        }
-    } else {
-        times++;
+    function log(msg) {
+        status.textContent = msg;
+        console.log(msg);
     }
-}, 2000);</div>
+
+    log('Starting...');
+    
+    // Scroll and collect images
+    var len = 0;
+    var times = 0;
+    while (times < 10) {
+        var images = document.querySelectorAll('img.chunk');
+        images[images.length-1].scrollIntoView();
+        
+        if (len === images.length) {
+            times++;
+        } else {
+            len = images.length;
+            times = 0;
+        }
+        
+        log('Found ' + len + ' pages...');
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    // Create PDF
+    log('Creating PDF...');
+    window.jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF();
+    const images = document.querySelectorAll('img.chunk');
+
+    for (let i = 0; i < images.length; i++) {
+        log('Processing page ' + (i + 1) + ' of ' + images.length);
+        
+        if (i > 0) pdf.addPage();
+        
+        const img = images[i];
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        
+        const imgData = canvas.toDataURL('image/jpeg', 0.8);
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    }
+
+    // Save PDF
+    log('Saving PDF...');
+    const name = location.pathname.split('/').pop();
+    pdf.save(name + '.pdf');
+    log('Done!');
+})();</div>
             </div>
         </div>
 
