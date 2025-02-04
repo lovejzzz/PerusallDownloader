@@ -143,6 +143,8 @@ title="${spl[spl.length-1]}"
     </div>
 
     <script>
+        // Initialize jsPDF
+        window.jsPDF = window.jspdf.jsPDF;
         // Register service worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js')
@@ -632,6 +634,14 @@ title="${spl[spl.length-1]}"
         }
 
         async function downloadArticle() {
+            // Clear previous console output
+            document.getElementById('console').innerHTML = '';
+            
+            // Add error handler
+            window.onerror = function(message, source, lineno, colno, error) {
+                logMessage(`Error: ${message}`);
+                return false;
+            };
             const input = document.getElementById('inputArea').value;
             if (!input) {
                 alert('Please paste the download info first!');
@@ -646,22 +656,45 @@ title="${spl[spl.length-1]}"
 
             const blobUrls = []; // Keep track of blob URLs
             try {
-                // Clear previous error messages
-                document.getElementById('console').innerHTML = '';
+                // Show starting status
+                updateProgress(0, 'Starting download...');
+                document.getElementById('downloadProgress').style.display = 'block';
                 
                 // Parse input
                 const urlsMatch = input.match(/urls = '''([\s\S]*?)'''/);
                 const titleMatch = input.match(/title="([^"]*)"/);
-
-                if (!urlsMatch || !titleMatch) {
-                    throw new Error('Invalid input format');
+                
+                if (!urlsMatch) {
+                    throw new Error('Could not find URLs in the pasted text. Make sure to copy the ENTIRE output including the === START === and === END === markers.');
+                }
+                
+                if (!titleMatch) {
+                    throw new Error('Could not find document title in the pasted text. Make sure to copy the ENTIRE output including the === START === and === END === markers.');
                 }
 
-                const urls = urlsMatch[1].trim().split('\n');
-                const title = titleMatch[1];
+                // Validate URLs
+                const urls = urlsMatch[1].trim().split('\n').filter(url => url.trim());
+                if (urls.length === 0) {
+                    throw new Error('No valid URLs found in the input.');
+                }
 
-                updateProgress(0, 'Starting download...');
-                logMessage('Starting download of ' + title);
+                const title = titleMatch[1];
+                
+                logMessage(`Found ${urls.length} pages to download`);
+                logMessage(`Document title: ${title}`);
+                
+                if (!window.jsPDF) {
+                    throw new Error('PDF library not initialized. Please refresh the page and try again.');
+                }
+
+                // Initialize jsPDF again just in case
+                try {
+                    new window.jsPDF();
+                } catch (error) {
+                    throw new Error('PDF library failed to initialize: ' + error.message);
+                }
+                
+                logMessage('PDF library initialized successfully');
                 logMessage(`Downloading ${urls.length} chunks in parallel batches...`);
 
                 // Download chunks in parallel batches
