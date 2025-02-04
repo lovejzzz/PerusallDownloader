@@ -76,7 +76,12 @@
                 <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
             </div>
             <div class="card-body">
-                <div class="code-area" id="codeArea">var len = 0;
+                <div class="code-area" id="codeArea">// Load jsPDF
+var script = document.createElement('script');
+script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+document.head.appendChild(script);
+
+var len = 0;
 var times = 0;
 var i = setInterval(() => {
     var img = document.querySelectorAll("img.chunk");
@@ -152,69 +157,6 @@ var i = setInterval(() => {
         times++;
     }
 }, 2000);
-        foundImages = document.querySelectorAll('img.chunk');
-        foundImages[foundImages.length-1].scrollIntoView();
-        
-        if (len === foundImages.length) {
-            times++;
-        } else {
-            len = foundImages.length;
-            times = 0;
-        }
-        
-        log('Found ' + len + ' pages...');
-        await new Promise(r => setTimeout(r, 1000));
-    }
-
-    // Group images by page
-    log('Grouping image chunks...');
-    const pageChunks = {};
-    for (const img of foundImages) {
-        // Extract page number from image URL or data-* attribute
-        const pageMatch = img.src.match(/page=(\d+)/) || img.getAttribute('data-page');
-        if (!pageMatch) continue;
-        
-        const pageNum = parseInt(pageMatch[1]);
-        if (!pageChunks[pageNum]) pageChunks[pageNum] = [];
-        pageChunks[pageNum].push(img);
-    }
-
-    // Sort pages
-    const pageNumbers = Object.keys(pageChunks).sort((a, b) => parseInt(a) - parseInt(b));
-    log(`Found ${pageNumbers.length} unique pages`);
-
-    // Create PDF
-    log('Creating PDF...');
-    window.jsPDF = window.jspdf.jsPDF;
-    const pdf = new jsPDF();
-    let isFirstPage = true;
-
-    for (const pageNum of pageNumbers) {
-        log(`Processing page ${pageNum}`);
-        const chunks = pageChunks[pageNum];
-        
-        // Create canvas for full page
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Calculate full page dimensions
-        let totalHeight = 0;
-        let maxWidth = 0;
-        for (const img of chunks) {
-            totalHeight += img.naturalHeight;
-            maxWidth = Math.max(maxWidth, img.naturalWidth);
-        }
-        
-        // Set canvas size
-        canvas.width = maxWidth;
-        canvas.height = totalHeight;
-        
-        // Draw chunks in order
-        let y = 0;
-        for (const img of chunks) {
-            ctx.drawImage(img, 0, y);
-            y += img.naturalHeight;
-        }
         
         // Add to PDF
         if (!isFirstPage) pdf.addPage();
