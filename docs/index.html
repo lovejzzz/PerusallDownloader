@@ -182,6 +182,27 @@
     </div>
 
     <script>
+        // Copy button functionality
+        async function copyCode() {
+            try {
+                const codeArea = document.getElementById('codeArea');
+                if (!codeArea) {
+                    alert('Error: Code area not found!');
+                    return;
+                }
+                
+                await navigator.clipboard.writeText(codeArea.textContent);
+                
+                // Visual feedback
+                const btn = document.querySelector('button.btn-primary');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = originalText, 2000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+                alert('Failed to copy code. Please try selecting and copying manually.');
+            }
+        }
         // Initialize jsPDF
         window.jsPDF = window.jspdf.jsPDF;
         // Register service worker
