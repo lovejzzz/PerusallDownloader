@@ -156,13 +156,31 @@ title="${spl[spl.length-1]}"
 
         function copyCode() {
             const codeArea = document.getElementById('codeArea');
-            navigator.clipboard.writeText(codeArea.textContent)
-                .then(() => {
-                    const btn = document.querySelector('.btn-primary');
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy Code', 2000);
-                })
-                .catch(err => console.error('Failed to copy:', err));
+            const text = codeArea.textContent;
+            
+            // Create temporary textarea
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            
+            // Select and copy
+            textarea.select();
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+            
+            // Clean up
+            document.body.removeChild(textarea);
+            
+            // Update button text
+            const btn = document.querySelector('.btn-primary');
+            btn.textContent = success ? 'Copied!' : 'Failed to copy';
+            setTimeout(() => btn.textContent = 'Copy Code', 2000);
         }
 
         function logMessage(message) {
@@ -620,8 +638,17 @@ title="${spl[spl.length-1]}"
                 return;
             }
 
+            // Disable the download button and input area
+            const downloadBtn = document.getElementById('downloadBtn');
+            const inputArea = document.getElementById('inputArea');
+            if (downloadBtn) downloadBtn.disabled = true;
+            if (inputArea) inputArea.disabled = true;
+
             const blobUrls = []; // Keep track of blob URLs
             try {
+                // Clear previous error messages
+                document.getElementById('console').innerHTML = '';
+                
                 // Parse input
                 const urlsMatch = input.match(/urls = '''([\s\S]*?)'''/);
                 const titleMatch = input.match(/title="([^"]*)"/);
@@ -673,6 +700,10 @@ title="${spl[spl.length-1]}"
             } finally {
                 // Clean up blob URLs
                 blobUrls.forEach(URL.revokeObjectURL);
+                
+                // Re-enable the download button and input area
+                if (downloadBtn) downloadBtn.disabled = false;
+                if (inputArea) inputArea.disabled = false;
             }
         }
     </script>
