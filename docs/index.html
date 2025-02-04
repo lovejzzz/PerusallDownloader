@@ -76,32 +76,30 @@
                 <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
             </div>
             <div class="card-body">
-                <div class="code-area" id="codeArea">var len = 0; 
+                <div class="code-area" id="codeArea">var len = 0;
 var times = 0;
-var i = setInterval(() => { 
-    var img = document.querySelectorAll("img.chunk"); 
-    img[img.length-1].scrollIntoView(); 
+var i = setInterval(() => {
+    var img = document.querySelectorAll("img.chunk");
+    img[img.length-1].scrollIntoView();
     if (len < img.length) {
         len = img.length;
     } else if (times > 3) {
-        var urls = [];
-        var pageNums = [];
-        img.forEach((e) => {
-            urls.push(e.src);
-            const pageMatch = e.src.match(/page=(\d+)/);
-            if (pageMatch) pageNums.push(parseInt(pageMatch[1]));
-        });
+        clearInterval(i);
+        console.log('Found ' + len + ' images');
         
         // Group images by page number
         const pageMap = {};
-        img.forEach((e, idx) => {
-            const pageNum = pageNums[idx];
+        img.forEach((e) => {
+            const pageMatch = e.src.match(/page=(\d+)/);
+            if (!pageMatch) return;
+            const pageNum = parseInt(pageMatch[1]);
             if (!pageMap[pageNum]) pageMap[pageNum] = [];
             pageMap[pageNum].push(e);
         });
         
         // Sort page numbers
         const sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
+        console.log('Found ' + sortedPages.length + ' pages');
         
         // Create PDF
         window.jsPDF = window.jspdf.jsPDF;
@@ -109,6 +107,7 @@ var i = setInterval(() => {
         let isFirstPage = true;
         
         for (const pageNum of sortedPages) {
+            console.log('Processing page ' + pageNum);
             const chunks = pageMap[pageNum];
             
             // Create canvas for full page
@@ -148,31 +147,11 @@ var i = setInterval(() => {
         
         var spl = location.pathname.split('/');
         pdf.save(spl[spl.length-1] + '.pdf');
-        
-        clearInterval(i);
+        console.log('PDF saved!');
     } else {
         times++;
     }
 }, 2000);
-
-    // Initialize status div
-    var status = document.createElement('div');
-    status.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:10px;background:#000;color:#0f0;border-radius:4px;font-family:monospace;';
-    document.body.appendChild(status);
-
-    function log(msg) {
-        status.textContent = msg;
-        console.log(msg);
-    }
-
-    log('Starting...');
-    
-    // Scroll and collect images
-    var len = 0;
-    var times = 0;
-    var foundImages;
-    
-    while (times < 10) {
         foundImages = document.querySelectorAll('img.chunk');
         foundImages[foundImages.length-1].scrollIntoView();
         
