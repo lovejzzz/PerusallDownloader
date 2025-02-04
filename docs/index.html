@@ -118,21 +118,59 @@
         await new Promise(r => setTimeout(r, 1000));
     }
 
+    // Group images by page
+    log('Grouping image chunks...');
+    const pageChunks = {};
+    for (const img of foundImages) {
+        // Extract page number from image URL or data-* attribute
+        const pageMatch = img.src.match(/page=(\d+)/) || img.getAttribute('data-page');
+        if (!pageMatch) continue;
+        
+        const pageNum = parseInt(pageMatch[1]);
+        if (!pageChunks[pageNum]) pageChunks[pageNum] = [];
+        pageChunks[pageNum].push(img);
+    }
+
+    // Sort pages
+    const pageNumbers = Object.keys(pageChunks).sort((a, b) => parseInt(a) - parseInt(b));
+    log(`Found ${pageNumbers.length} unique pages`);
+
     // Create PDF
     log('Creating PDF...');
     window.jsPDF = window.jspdf.jsPDF;
     const pdf = new jsPDF();
+    let isFirstPage = true;
 
-    for (let i = 0; i < foundImages.length; i++) {
-        log('Processing page ' + (i + 1) + ' of ' + foundImages.length);
+    for (const pageNum of pageNumbers) {
+        log(`Processing page ${pageNum}`);
+        const chunks = pageChunks[pageNum];
         
-        if (i > 0) pdf.addPage();
-        
-        const img = foundImages[i];
+        // Create canvas for full page
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        canvas.getContext('2d').drawImage(img, 0, 0);
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate full page dimensions
+        let totalHeight = 0;
+        let maxWidth = 0;
+        for (const img of chunks) {
+            totalHeight += img.naturalHeight;
+            maxWidth = Math.max(maxWidth, img.naturalWidth);
+        }
+        
+        // Set canvas size
+        canvas.width = maxWidth;
+        canvas.height = totalHeight;
+        
+        // Draw chunks in order
+        let y = 0;
+        for (const img of chunks) {
+            ctx.drawImage(img, 0, y);
+            y += img.naturalHeight;
+        }
+        
+        // Add to PDF
+        if (!isFirstPage) pdf.addPage();
+        isFirstPage = false;
         
         const imgData = canvas.toDataURL('image/jpeg', 0.8);
         const imgProps = pdf.getImageProperties(imgData);
