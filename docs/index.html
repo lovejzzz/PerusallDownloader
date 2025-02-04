@@ -268,26 +268,22 @@ var i = setInterval(() => {
     </div>
 
     <script>
-        // Copy button functionality
-        async function copyCode() {
+        function copyCode() {
+            const codeArea = document.getElementById('codeArea');
+            const textArea = document.createElement('textarea');
+            textArea.value = codeArea.textContent;
+            document.body.appendChild(textArea);
+            textArea.select();
             try {
-                const codeArea = document.getElementById('codeArea');
-                if (!codeArea) {
-                    alert('Error: Code area not found!');
-                    return;
-                }
-                
-                await navigator.clipboard.writeText(codeArea.textContent);
-                
-                // Visual feedback
+                document.execCommand('copy');
                 const btn = document.querySelector('button.btn-primary');
-                const originalText = btn.textContent;
                 btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = originalText, 2000);
+                setTimeout(() => btn.textContent = 'Copy Code', 2000);
             } catch (err) {
                 console.error('Copy failed:', err);
-                alert('Failed to copy code. Please try selecting and copying manually.');
+                alert('Failed to copy. Please try selecting and copying manually.');
             }
+            document.body.removeChild(textArea);
         }
         // Initialize jsPDF
         window.jsPDF = window.jspdf.jsPDF;
