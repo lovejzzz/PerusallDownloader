@@ -217,14 +217,73 @@ document.head.appendChild(script);
 
 var len = 0;
 var times = 0;
-var i = setInterval(() => {
+var noNewImagesCount = 0;
+var maxNoNewImages = 10; // Wait longer before concluding scrolling is done
+var lastScrollPosition = 0;
+var sameScrollPositionCount = 0;
+var totalScrollAttempts = 0;
+var maxScrollAttempts = 50; // Maximum number of scroll attempts
+
+console.log('Starting Perusall Article Downloader...');
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function scrollToBottom() {
+    const oldScrollPos = window.scrollY;
+    window.scrollTo(0, document.body.scrollHeight);
+    await sleep(500);
+    return window.scrollY > oldScrollPos;
+}
+
+var i = setInterval(async () => {
+    if (totalScrollAttempts >= maxScrollAttempts) {
+        console.log('Reached maximum scroll attempts, stopping...');
+        clearInterval(i);
+        return;
+    }
+    totalScrollAttempts++;
+
     var img = document.querySelectorAll("img.chunk");
-    img[img.length-1].scrollIntoView();
+    var currentScrollPosition = window.scrollY;
+    
+    // Check if we're stuck at the same scroll position
+    if (currentScrollPosition === lastScrollPosition) {
+        sameScrollPositionCount++;
+        if (sameScrollPositionCount > 3) {
+            // Try different scroll strategies
+            if (await scrollToBottom()) {
+                console.log('Successfully scrolled to new position');
+                sameScrollPositionCount = 0;
+            } else {
+                console.log('Failed to scroll further, might be at the end');
+            }
+        }
+    } else {
+        sameScrollPositionCount = 0;
+    }
+    lastScrollPosition = currentScrollPosition;
+    
+    // Scroll to the last image
+    if (img.length > 0) {
+        img[img.length-1].scrollIntoView({ behavior: 'smooth' });
+        console.log('Scrolling... Found ' + img.length + ' images so far');
+    }
+    
     if (len < img.length) {
         len = img.length;
-    } else if (times > 3) {
+        noNewImagesCount = 0; // Reset counter when we find new images
+        console.log('Found new images, total now: ' + len);
+    } else {
+        noNewImagesCount++;
+        console.log('No new images found, attempt ' + noNewImagesCount + ' of ' + maxNoNewImages);
+    }
+    
+    // Only stop if we haven't found new images for a while
+    if (noNewImagesCount >= maxNoNewImages) {
         clearInterval(i);
-        console.log('Found ' + len + ' images');
+        console.log('Finished scrolling. Found ' + len + ' images total');
         
         // Group images by page number
         const pageMap = {};
@@ -232,12 +291,18 @@ var i = setInterval(() => {
             // Debug: log the image URL
             console.log('Image URL:', e.src);
             
-            // Try different patterns
+            // Try different patterns for page number extraction
             let pageNum;
             const patterns = [
                 /page=(\d+)/, // Standard pattern
                 /page\/(\d+)/, // Alternative pattern
                 /p(\d+)\// // Another pattern
+                /page-(\d+)/, // Hyphenated pattern
+                /-p(\d+)-/, // Embedded pattern
+                /_(\d+)\.[^.]+$/, // Trailing number pattern
+                /\/(\d+)\./, // Number before extension
+                /chunk[_-](\d+)/, // Chunk number pattern
+                /section[_-](\d+)/ // Section number pattern
             ];
             
             for (const pattern of patterns) {
@@ -258,36 +323,123 @@ var i = setInterval(() => {
             
             // If still no page number, try parent elements
             if (!pageNum) {
-                const parent = e.closest('[data-page], [data-page-number], [page]');
+                const parent = e.closest('[data-page], [data-page-number], [page], [data-index]');
                 if (parent) {
-                    pageNum = parent.getAttribute('data-page') || 
-                             parent.getAttribute('data-page-number') || 
-                             parent.getAttribute('page');
-                    if (pageNum) pageNum = parseInt(pageNum);
+                    const attrs = ['data-page', 'data-page-number', 'page', 'data-index'];
+                    for (const attr of attrs) {
+                        const value = parent.getAttribute(attr);
+                        if (value) {
+                            pageNum = parseInt(value);
+                            console.log(`Found page number ${pageNum} from parent attribute ${attr}`);
+                            break;
+                        }
+                    }
                 }
+            }
+            
+            // Try to find page number in nearby elements
+            if (!pageNum) {
+                const nearby = document.elementsFromPoint(e.offsetLeft, e.offsetTop);
+                for (const el of nearby) {
+                    const text = el.textContent;
+                    const match = text.match(/page\s*(\d+)/i);
+                    if (match) {
+                        pageNum = parseInt(match[1]);
+                        console.log(`Found page number ${pageNum} from nearby text`);
+                        break;
+                    }
+                }
+            }
+            
+            // Use vertical position as last resort
+            if (!pageNum) {
+                const rect = e.getBoundingClientRect();
+                const verticalPosition = rect.top + window.scrollY;
+                const imagesBefore = Array.from(img).filter(otherImg => {
+                    const otherRect = otherImg.getBoundingClientRect();
+                    return otherRect.top + window.scrollY < verticalPosition;
+                });
+                pageNum = Math.floor(imagesBefore.length / 2) + 1; // Assuming ~2 chunks per page
+                console.log(`Using position-based page number ${pageNum} as fallback`);
             }
             
             // Debug: log the found page number
             console.log('Found page number:', pageNum);
             
-            if (!pageNum) {
-                console.log('No page number found for image');
-                return;
-            }
-            
             if (!pageMap[pageNum]) pageMap[pageNum] = [];
             pageMap[pageNum].push(e);
         });
         
-        // Sort page numbers
-        const sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
-        console.log('Found ' + sortedPages.length + ' pages');
-        console.log('Page numbers found:', sortedPages);
+        // Sort and validate page numbers
+        let sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
+        console.log('Initially found ' + sortedPages.length + ' pages');
+        console.log('Initial page numbers:', sortedPages);
+        
+        // Check for missing pages
+        const expectedPages = [];
+        const firstPage = parseInt(sortedPages[0]);
+        const lastPage = parseInt(sortedPages[sortedPages.length - 1]);
+        for (let i = firstPage; i <= lastPage; i++) {
+            expectedPages.push(i);
+        }
+        
+        const missingPages = expectedPages.filter(page => !sortedPages.includes(page.toString()));
+        if (missingPages.length > 0) {
+            console.warn('Warning: Missing pages detected:', missingPages);
+            console.warn('This might indicate incomplete scrolling or page detection issues');
+            
+            // Try to recover missing pages
+            missingPages.forEach(missingPage => {
+                console.log(`Attempting to recover page ${missingPage}...`);
+                
+                // Look for unassigned chunks
+                const unassignedChunks = Array.from(img).filter(chunk => {
+                    return !Object.values(pageMap).flat().includes(chunk);
+                });
+                
+                if (unassignedChunks.length > 0) {
+                    console.log(`Found ${unassignedChunks.length} unassigned chunks`);
+                    
+                    // Try to find chunks that belong to this page
+                    const prevPage = missingPage - 1;
+                    const nextPage = missingPage + 1;
+                    const prevChunks = pageMap[prevPage] || [];
+                    const nextChunks = pageMap[nextPage] || [];
+                    
+                    // Calculate expected vertical position for this page
+                    const avgChunksPerPage = Math.max(
+                        prevChunks.length || 2,
+                        nextChunks.length || 2
+                    );
+                    
+                    // Sort unassigned chunks by vertical position
+                    unassignedChunks.sort((a, b) => {
+                        const posA = a.getBoundingClientRect().top + window.scrollY;
+                        const posB = b.getBoundingClientRect().top + window.scrollY;
+                        return posA - posB;
+                    });
+                    
+                    // Take chunks that seem to belong to this page
+                    pageMap[missingPage] = unassignedChunks.slice(0, avgChunksPerPage);
+                    console.log(`Assigned ${pageMap[missingPage].length} chunks to page ${missingPage}`);
+                    
+                    // Update sorted pages
+                    sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
+                }
+            });
+        }
         
         if (sortedPages.length === 0) {
             console.error('No pages found! Please check the page number extraction logic.');
             return;
         }
+        
+        // Final validation
+        console.log(`Final count: ${sortedPages.length} pages (expected ${expectedPages.length} pages)`);
+        console.log('Page distribution:');
+        sortedPages.forEach(pageNum => {
+            console.log(`Page ${pageNum}: ${pageMap[pageNum].length} chunks`);
+        });
         
         // Create PDF
         window.jsPDF = window.jspdf.jsPDF;
