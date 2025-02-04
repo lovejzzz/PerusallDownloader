@@ -243,23 +243,37 @@ var i = setInterval(() => {
     </div>
 
     <script>
+        function selectText(node) {
+            if (document.body.createTextRange) {
+                const range = document.body.createTextRange();
+                range.moveToElementText(node);
+                range.select();
+            } else if (window.getSelection) {
+                const selection = window.getSelection();
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        }
+
         function copyCode() {
-            // Get the code
-            const code = document.getElementById('codeArea').innerText;
+            const codeArea = document.getElementById('codeArea');
+            selectText(codeArea);
             
-            // Show what's being copied in console
-            console.log('Copying code:', code);
-            
-            // Copy to clipboard
-            navigator.clipboard.writeText(code).then(() => {
-                // Success feedback
-                const btn = document.querySelector('button.btn-primary');
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = 'Copy Code', 2000);
-            }).catch(err => {
+            try {
+                const success = document.execCommand('copy');
+                if (success) {
+                    const btn = document.querySelector('button.btn-primary');
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => btn.textContent = 'Copy Code', 2000);
+                } else {
+                    throw new Error('Copy command failed');
+                }
+            } catch (err) {
                 console.error('Copy failed:', err);
-                alert('Could not copy automatically. Please press Ctrl+A then Ctrl+C to copy manually.');
-            });
+                alert('Please manually copy the selected code (Ctrl+C or Cmd+C)');
+            }
         }
         // Initialize jsPDF
         window.jsPDF = window.jspdf.jsPDF;
