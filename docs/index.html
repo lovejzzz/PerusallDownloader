@@ -264,6 +264,20 @@ title="${spl[spl.length-1]}"
             }
         }
 
+        async function getProxyUrl(url, proxyIndex = 0) {
+            const proxies = [
+                (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+                (url) => `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(url)}`,
+                (url) => `https://cors.bridged.cc/${url}`,
+                (url) => `https://proxy.cors.sh/${url}`,
+                (url) => `https://cors.eu.org/${url}`,
+                (url) => `https://yacdn.org/proxy/${url}`
+            ];
+            return proxies[proxyIndex % proxies.length](url);
+        }
+
         async function downloadChunk(url, index, blobUrls) {
             // Check cache first
             if (chunkCache.has(url)) {
@@ -271,19 +285,24 @@ title="${spl[spl.length-1]}"
                 return chunkCache.get(url);
             }
 
-            const MAX_RETRIES = 3;
+            // Try each proxy in sequence
+            let proxyIndex = 0;
             let lastError = null;
 
-            // First try direct download
-            for (let retry = 0; retry < MAX_RETRIES; retry++) {
-                if (retry > 0) {
-                    const delay = Math.min(retry * 2000, 10000);
-                    logMessage(`Retrying chunk ${index + 1} (attempt ${retry + 1}/${MAX_RETRIES}) after ${delay/1000}s delay...`);
+            while (proxyIndex < 8) { // Try all proxies
+                if (proxyIndex > 0) {
+                    const delay = 1000;
+                    logMessage(`Trying different proxy for chunk ${index + 1} (proxy ${proxyIndex + 1}/8)...`);
                     await sleep(delay);
                 }
 
                 try {
-                    const response = await fetch(url);
+                    const proxyUrl = await getProxyUrl(url, proxyIndex);
+                    const response = await fetch(proxyUrl, {
+                        headers: {
+                            'x-requested-with': 'XMLHttpRequest'
+                        }
+                    });
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
                     }
@@ -303,15 +322,10 @@ title="${spl[spl.length-1]}"
                 }
             }
 
-            // If direct download failed, try data URL approach
-            try {
-                logMessage(`Direct download failed for chunk ${index + 1}, trying manual download...`);
-                const dataUrl = await tryFetchWithDataUrl(url);
-                chunkCache.set(url, dataUrl);
-                return dataUrl;
-            } catch (error) {
-                throw new Error(`Failed to download chunk ${index + 1}: ${lastError?.message || 'Unknown error'}`);
+                proxyIndex++;
             }
+
+            throw new Error(`Failed to download chunk ${index + 1}: All proxies failed`);
         }
 
         async function downloadChunksInParallel(urls, blobUrls, startPage = 1) {
@@ -354,20 +368,29 @@ title="${spl[spl.length-1]}"
             }
 
             if (failedChunks.length > 0) {
-                // Create manual download buttons for each failed chunk
+                // Show all pages in a grid for easy downloading
                 const failedDiv = document.createElement('div');
                 failedDiv.className = 'mt-3';
-                failedDiv.innerHTML = `<h5>Failed Pages: ${failedChunks.join(', ')}</h5>`;
-                
-                for (const pageNum of failedChunks) {
-                    const btn = document.createElement('button');
-                    btn.textContent = `Download Page ${pageNum}`;
-                    btn.className = 'btn btn-warning m-1';
-                    btn.onclick = () => {
-                        window.open(urls[pageNum - 1], '_blank');
-                    };
-                    failedDiv.appendChild(btn);
-                }
+                failedDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h5>Some pages failed to download automatically</h5>
+                        <p>1. Click each failed page below to open it in a new tab</p>
+                        <p>2. Save all images (right-click → Save Image As...)</p>
+                        <p>3. Use a PDF tool to combine them with the main PDF</p>
+                    </div>
+                    <div class="row">
+                        ${failedChunks.map(pageNum => `
+                            <div class="col-md-4 mb-2">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">Page ${pageNum}</h5>
+                                        <a href="${urls[pageNum - 1]}" target="_blank" class="btn btn-primary">Open Page ${pageNum}</a>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
                 
                 document.getElementById('status').appendChild(failedDiv);
                 throw new Error(`Failed to download chunks: ${failedChunks.join(', ')}`);
