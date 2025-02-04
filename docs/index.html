@@ -101,14 +101,16 @@
     // Scroll and collect images
     var len = 0;
     var times = 0;
+    var foundImages;
+    
     while (times < 10) {
-        var images = document.querySelectorAll('img.chunk');
-        images[images.length-1].scrollIntoView();
+        foundImages = document.querySelectorAll('img.chunk');
+        foundImages[foundImages.length-1].scrollIntoView();
         
-        if (len === images.length) {
+        if (len === foundImages.length) {
             times++;
         } else {
-            len = images.length;
+            len = foundImages.length;
             times = 0;
         }
         
@@ -120,14 +122,13 @@
     log('Creating PDF...');
     window.jsPDF = window.jspdf.jsPDF;
     const pdf = new jsPDF();
-    const images = document.querySelectorAll('img.chunk');
 
-    for (let i = 0; i < images.length; i++) {
-        log('Processing page ' + (i + 1) + ' of ' + images.length);
+    for (let i = 0; i < foundImages.length; i++) {
+        log('Processing page ' + (i + 1) + ' of ' + foundImages.length);
         
         if (i > 0) pdf.addPage();
         
-        const img = images[i];
+        const img = foundImages[i];
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
