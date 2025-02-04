@@ -95,7 +95,7 @@ var i = setInterval(() => {
         // Group images by page number
         const pageMap = {};
         img.forEach((e) => {
-            const pageMatch = e.src.match(/page=(\d+)/);
+            const pageMatch = e.src.match(/page=(\\d+)/);
             if (!pageMatch) return;
             const pageNum = parseInt(pageMatch[1]);
             if (!pageMap[pageNum]) pageMap[pageNum] = [];
