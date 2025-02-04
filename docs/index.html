@@ -7,75 +7,235 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        /* Console styling */
-        #console {
-            background-color: #1e1e1e;
-            color: #33ff33;
-            padding: 10px;
-            border-radius: 5px;
-            height: 300px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.5;
-            margin-top: 10px;
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #f5f6fa;
+            --text-color: #2c3e50;
+            --code-bg: #282c34;
+            --code-color: #abb2bf;
         }
-        #console div {
-            margin: 2px 0;
-            word-wrap: break-word;
-        }
+
         body {
-            padding: 20px;
-            max-width: 1000px;
-            margin: 0 auto;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 2rem;
         }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            padding: 2rem;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .card {
+            border: none;
+            border-radius: 0.8rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: var(--secondary-color);
+            border-bottom: none;
+            padding: 1rem 1.5rem;
+        }
+
+        .card-title {
+            color: var(--primary-color);
+            margin: 0;
+            font-weight: 600;
+        }
+
         .code-area {
-            font-family: monospace;
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            background: var(--code-bg);
+            color: var(--code-color);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
             white-space: pre;
             overflow-x: auto;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background: #357abd;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(74,144,226,0.2);
         }
 
         .progress {
-            height: 25px;
+            height: 0.8rem;
+            border-radius: 1rem;
+            background: var(--secondary-color);
+            margin: 1rem 0;
         }
-        #downloadProgress {
-            display: none;
+
+        .progress-bar {
+            background: var(--primary-color);
+            border-radius: 1rem;
+        }
+
+        #console {
+            background: var(--code-bg);
+            color: #98c379;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        /* Instructions styling */
+        ol {
+            padding-left: 1.2rem;
+        }
+
+        ol li {
+            margin-bottom: 0.8rem;
+            position: relative;
+            padding-left: 0.5rem;
+        }
+
+        /* Step numbers */
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+
+        /* Keyboard keys */
+        kbd {
+            background: var(--secondary-color);
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            box-shadow: 0 1px 1px rgba(0,0,0,.2);
+            color: var(--text-color);
+            display: inline-block;
+            font-size: 0.85em;
+            font-weight: 600;
+            line-height: 1;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }
+
+        /* Copy button */
+        .btn-primary {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .copy-icon {
+            transition: transform 0.2s ease;
+        }
+
+        .btn-primary:hover .copy-icon {
+            transform: translateY(-1px);
+        }
+
+        /* Code container */
+        .code-container {
+            position: relative;
+            padding: 0;
+        }
+
+        .code-area {
+            margin: 0;
+            padding: 1.5rem;
+            border-radius: 0;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .code-area {
+                font-size: 0.8rem;
+            }
+
+            .step-number {
+                width: 20px;
+                height: 20px;
+                font-size: 0.75rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="mb-4">Perusall Article Downloader</h1>
+        <h1>Perusall Article Downloader</h1>
         
         <!-- Instructions -->
-        <div class="card mb-4">
+        <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Instructions</h5>
+                <h5 class="card-title">How to Use</h5>
             </div>
             <div class="card-body">
                 <ol>
-                    <li>Open your Perusall article in Chrome/Firefox</li>
-                    <li>Press F12 to open Developer Tools</li>
-                    <li>Click on Console tab</li>
-                    <li>Copy and paste the code below into the console</li>
-                    <li>Wait for the code to finish running (it will scroll through the article)</li>
-                    <li>Look for output between "=== START OF DOWNLOAD INFO ===" and "=== END OF DOWNLOAD INFO ==="</li>
-                    <li>Copy <strong>everything</strong> including the START and END markers</li>
-                    <li>Paste the entire output in the input area below</li>
+                    <li><span class="step-number">1</span> Open your Perusall article in Chrome/Firefox</li>
+                    <li><span class="step-number">2</span> Press <kbd>F12</kbd> to open Developer Tools</li>
+                    <li><span class="step-number">3</span> Click on <kbd>Console</kbd> tab</li>
+                    <li><span class="step-number">4</span> Copy and paste the code below</li>
+                    <li><span class="step-number">5</span> Wait for the automatic scrolling to finish</li>
+                    <li><span class="step-number">6</span> Your PDF will be downloaded automatically!</li>
                 </ol>
             </div>
         </div>
 
         <!-- JavaScript Code -->
-        <div class="card mb-4">
+        <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">JavaScript Code</h5>
-                <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
+                <h5 class="card-title">Code to Run</h5>
+                <button class="btn btn-primary" onclick="copyCode()">
+                    <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copy Code
+                </button>
             </div>
-            <div class="card-body">
+            <div class="card-body code-container">
                 <div class="code-area" id="codeArea">// Load jsPDF
 var script = document.createElement('script');
 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
