@@ -244,21 +244,22 @@ var i = setInterval(() => {
 
     <script>
         function copyCode() {
-            const codeArea = document.getElementById('codeArea');
-            const textArea = document.createElement('textarea');
-            textArea.value = codeArea.textContent;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
+            // Get the code
+            const code = document.getElementById('codeArea').innerText;
+            
+            // Show what's being copied in console
+            console.log('Copying code:', code);
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(code).then(() => {
+                // Success feedback
                 const btn = document.querySelector('button.btn-primary');
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = 'Copy Code', 2000);
-            } catch (err) {
+            }).catch(err => {
                 console.error('Copy failed:', err);
-                alert('Failed to copy. Please try selecting and copying manually.');
-            }
-            document.body.removeChild(textArea);
+                alert('Could not copy automatically. Please press Ctrl+A then Ctrl+C to copy manually.');
+            });
         }
         // Initialize jsPDF
         window.jsPDF = window.jspdf.jsPDF;
