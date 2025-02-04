@@ -76,15 +76,84 @@
                 <button class="btn btn-primary btn-sm" onclick="copyCode()">Copy Code</button>
             </div>
             <div class="card-body">
-                <div class="code-area" id="codeArea">(async function() {
-    // Load jsPDF
-    await new Promise((resolve, reject) => {
-        var script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
+                <div class="code-area" id="codeArea">var len = 0; 
+var times = 0;
+var i = setInterval(() => { 
+    var img = document.querySelectorAll("img.chunk"); 
+    img[img.length-1].scrollIntoView(); 
+    if (len < img.length) {
+        len = img.length;
+    } else if (times > 3) {
+        var urls = [];
+        var pageNums = [];
+        img.forEach((e) => {
+            urls.push(e.src);
+            const pageMatch = e.src.match(/page=(\d+)/);
+            if (pageMatch) pageNums.push(parseInt(pageMatch[1]));
+        });
+        
+        // Group images by page number
+        const pageMap = {};
+        img.forEach((e, idx) => {
+            const pageNum = pageNums[idx];
+            if (!pageMap[pageNum]) pageMap[pageNum] = [];
+            pageMap[pageNum].push(e);
+        });
+        
+        // Sort page numbers
+        const sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
+        
+        // Create PDF
+        window.jsPDF = window.jspdf.jsPDF;
+        const pdf = new jsPDF();
+        let isFirstPage = true;
+        
+        for (const pageNum of sortedPages) {
+            const chunks = pageMap[pageNum];
+            
+            // Create canvas for full page
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Calculate full page dimensions
+            let totalHeight = 0;
+            let maxWidth = 0;
+            for (const img of chunks) {
+                totalHeight += img.naturalHeight;
+                maxWidth = Math.max(maxWidth, img.naturalWidth);
+            }
+            
+            // Set canvas size
+            canvas.width = maxWidth;
+            canvas.height = totalHeight;
+            
+            // Draw chunks in order
+            let y = 0;
+            for (const img of chunks) {
+                ctx.drawImage(img, 0, y);
+                y += img.naturalHeight;
+            }
+            
+            // Add to PDF
+            if (!isFirstPage) pdf.addPage();
+            isFirstPage = false;
+            
+            const imgData = canvas.toDataURL('image/jpeg', 0.8);
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+        }
+        
+        var spl = location.pathname.split('/');
+        pdf.save(spl[spl.length-1] + '.pdf');
+        
+        clearInterval(i);
+    } else {
+        times++;
+    }
+}, 2000);
 
     // Initialize status div
     var status = document.createElement('div');
