@@ -173,16 +173,20 @@
         };
 
         // Initialize variables
+        const expectedPages = detectTotalPages(); // Try to detect total pages
+        if (!expectedPages) {
+            throw new Error('Could not detect total pages. Please try again.');
+        }
+        console.log('Detected total pages:', expectedPages);
+        
         let len = 0;
         let noNewImagesCount = 0;
-        let maxNoNewImages = 5;
+        let maxNoNewImages = 10;
         let lastScrollPosition = 0;
         let samePositionCount = 0;
         let maxSamePosition = 3;
-        let totalScrollAttempts = 0;
-        let maxScrollAttempts = 150; // Increase max attempts further
-        const expectedPages = detectTotalPages(); // Try to detect total pages
-        console.log('Detected total pages:', expectedPages);
+        const expectedImages = expectedPages * 6;
+        console.log(`Expecting ${expectedImages} images (${expectedPages} pages * 6 images per page)`);
         
         // Helper function to load an image
         const loadImage = (url) => new Promise((resolve, reject) => {
@@ -210,17 +214,32 @@
         // Scroll and collect images
         await new Promise((resolve) => {
             const scrollInterval = setInterval(async () => {
-                if (totalScrollAttempts >= maxScrollAttempts) {
-                    console.log('Reached maximum scroll attempts');
+                const images = document.querySelectorAll('img.chunk');
+                const currentPosition = window.pageYOffset;
+                
+                // Log progress
+                console.log(`Current images: ${images.length}/${expectedImages}, No new images: ${noNewImagesCount}/${maxNoNewImages}`);
+                
+                // If we haven't found enough images and haven't seen new ones in a while
+                if (images.length < expectedImages && noNewImagesCount >= maxNoNewImages) {
+                    // Try more aggressive scrolling
+                    console.log('Trying aggressive scroll...');
+                    window.scrollTo(0, 0);
+                    await new Promise(r => setTimeout(r, 1000));
+                    window.scrollTo(0, document.body.scrollHeight);
+                    await new Promise(r => setTimeout(r, 1000));
+                    noNewImagesCount = 0; // Reset counter
+                }
+                
+                // If we've found all images or tried everything
+                if (images.length >= expectedImages || noNewImagesCount >= maxNoNewImages * 2) {
+                    console.log(`Finishing with ${images.length}/${expectedImages} images`);
                     clearInterval(scrollInterval);
                     resolve();
                     return;
                 }
-                totalScrollAttempts++;
 
-                const images = document.querySelectorAll('img.chunk');
-                const currentPosition = window.pageYOffset;
-                console.log(`Current images: ${images.length}, Last length: ${len}, Attempts: ${totalScrollAttempts}/${maxScrollAttempts}`);
+
                 
                 // Check if we're stuck at the same position
                 if (Math.abs(currentPosition - lastScrollPosition) < 10) {
@@ -259,14 +278,7 @@
                     }
                 }
 
-                // Check if we've found all pages
-                const estimatedTotalPages = Math.ceil(images.length / 6);
-                const targetPages = expectedPages || 33; // Use detected pages or fallback to 33
-                if (estimatedTotalPages >= targetPages) {
-                    console.log('Found all expected pages');
-                    clearInterval(scrollInterval);
-                    resolve();
-                }
+
             }, 2000);
         });
 
