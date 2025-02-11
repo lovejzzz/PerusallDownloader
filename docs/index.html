@@ -199,47 +199,74 @@
         // Function to collect all available images
         const collectAllImages = async () => {
             console.log('Starting image collection...');
-            const images = new Set();
-            let lastCount = 0;
+            const imageSet = new Set();
+            let noNewCount = 0;
             let attempts = 0;
-            const maxAttempts = 5;
+            const maxAttempts = 10;
+            const expectedImages = 6 * expectedPages; // Calculate total expected images
 
-            // First, scroll through the document to trigger lazy loading
-            const scrollHeight = document.documentElement.scrollHeight;
-            const viewportHeight = window.innerHeight;
-            const scrollStep = Math.floor(viewportHeight / 2);
+            // First, try to load all sections
+            const sections = document.querySelectorAll('[class*="section"], [class*="page"]');
+            console.log(`Found ${sections.length} sections to try loading`);
+            
+            for (const section of sections) {
+                try {
+                    section.scrollIntoView({ behavior: 'smooth' });
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (e) {}
+            }
 
-            while (attempts < maxAttempts) {
+            // Now start collecting images
+            while (noNewCount < 3 && attempts < maxAttempts) {
                 attempts++;
                 console.log(`Collection attempt ${attempts}/${maxAttempts}...`);
 
-                // Scroll from top to bottom in smaller steps
-                for (let scrollPos = 0; scrollPos <= scrollHeight; scrollPos += scrollStep) {
-                    window.scrollTo(0, scrollPos);
-                    await new Promise(r => setTimeout(r, 500));
+                // Scroll to different positions
+                const scrollPositions = [
+                    0, // Top
+                    document.body.scrollHeight / 4,
+                    document.body.scrollHeight / 2,
+                    (document.body.scrollHeight * 3) / 4,
+                    document.body.scrollHeight // Bottom
+                ];
 
-                    // Get all images in the current viewport
+                for (const position of scrollPositions) {
+                    window.scrollTo(0, position);
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    // Get current images
                     const currentImages = document.querySelectorAll('img.chunk');
-                    const prevSize = images.size;
-                    currentImages.forEach(img => images.add(img));
+                    const prevSize = imageSet.size;
 
-                    if (images.size > prevSize) {
-                        console.log(`Found ${images.size} total images (+${images.size - prevSize} new)`);
+                    currentImages.forEach(img => {
+                        if (img && img.src) {
+                            imageSet.add(img);
+                        }
+                    });
+
+                    if (imageSet.size > prevSize) {
+                        console.log(`Found ${imageSet.size} total images (+${imageSet.size - prevSize} new)`);
+                        noNewCount = 0;
+                    } else {
+                        noNewCount++;
                     }
 
                     // If we have all expected images, we can stop
-                    if (images.size >= expectedImages) {
+                    if (imageSet.size >= expectedImages) {
                         console.log('Found all expected images!');
-                        return Array.from(images);
+                        return Array.from(imageSet);
                     }
                 }
 
-                // Scroll back to top for next attempt
-                window.scrollTo(0, 0);
-                await new Promise(r => setTimeout(r, 1000));
+                // Try scrolling around the current viewport
+                const currentPos = window.pageYOffset;
+                for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += 100) {
+                    window.scrollTo(0, currentPos + offset);
+                    await new Promise(r => setTimeout(r, 500));
+                }
             }
 
-            return Array.from(images);
+            return Array.from(imageSet);
         };
 
         // Collect and organize images
