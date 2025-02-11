@@ -136,15 +136,53 @@
             });
         }
 
+        // Try to detect total pages from Perusall interface
+        const detectTotalPages = () => {
+            // Try various selectors that might contain page information
+            const selectors = [
+                '.p-page-count',
+                '.page-count',
+                '[data-total-pages]',
+                '.total-pages',
+                // Add more selectors as needed
+            ];
+
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    const text = element.textContent || element.getAttribute('data-total-pages');
+                    if (text) {
+                        const match = text.match(/(\d+)\s*(?:pages?|$)/i);
+                        if (match) {
+                            return parseInt(match[1]);
+                        }
+                    }
+                }
+            }
+
+            // Try to find page numbers in the navigation
+            const pageNumbers = Array.from(document.querySelectorAll('[data-page-number], [data-page]'))
+                .map(el => parseInt(el.getAttribute('data-page-number') || el.getAttribute('data-page')))
+                .filter(num => !isNaN(num));
+
+            if (pageNumbers.length > 0) {
+                return Math.max(...pageNumbers);
+            }
+
+            return null;
+        };
+
         // Initialize variables
         let len = 0;
         let noNewImagesCount = 0;
-        let maxNoNewImages = 5; // Wait longer before concluding
+        let maxNoNewImages = 5;
         let lastScrollPosition = 0;
         let samePositionCount = 0;
         let maxSamePosition = 3;
         let totalScrollAttempts = 0;
-        let maxScrollAttempts = 100; // Increase max attempts
+        let maxScrollAttempts = 150; // Increase max attempts further
+        const expectedPages = detectTotalPages(); // Try to detect total pages
+        console.log('Detected total pages:', expectedPages);
         
         // Helper function to load an image
         const loadImage = (url) => new Promise((resolve, reject) => {
@@ -221,9 +259,10 @@
                     }
                 }
 
-                // Check if we've found all pages (assuming 6 chunks per page)
+                // Check if we've found all pages
                 const estimatedTotalPages = Math.ceil(images.length / 6);
-                if (estimatedTotalPages >= 33) { // We know we need 33 pages
+                const targetPages = expectedPages || 33; // Use detected pages or fallback to 33
+                if (estimatedTotalPages >= targetPages) {
                     console.log('Found all expected pages');
                     clearInterval(scrollInterval);
                     resolve();
@@ -231,9 +270,11 @@
             }, 2000);
         });
 
-        // Get all images
+        // Get all images and ensure we have enough
         const images = Array.from(document.querySelectorAll('img.chunk'));
-        console.log(`Total images found: ${images.length}`);
+        const targetPages = expectedPages || 33; // Use detected pages or fallback to 33
+        const expectedImages = targetPages * 6;
+        console.log(`Total images found: ${images.length} (expecting ~${expectedImages} for ${targetPages} pages)`);
         
         // Group images by their vertical position (6 chunks per group)
         const chunks = [];
