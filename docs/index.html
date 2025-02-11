@@ -6,173 +6,83 @@
     <title>Perusall Article Downloader</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&display=swap" rel="stylesheet">
+    <!-- Required libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        // Initialize jsPDF
+        window.jspdf = window.jspdf || {};
+    </script>
     <style>
         :root {
             --primary-color: #4a90e2;
             --secondary-color: #f5f6fa;
             --text-color: #2c3e50;
-            --code-bg: #282c34;
-            --code-color: #abb2bf;
+            --border-color: #e1e8ed;
+            --code-bg: #f8f9fa;
         }
-
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            line-height: 1.6;
+            font-family: 'Inter', sans-serif;
             color: var(--text-color);
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            min-height: 100vh;
-            padding: 2rem;
+            line-height: 1.6;
+            background-color: var(--secondary-color);
         }
-
         .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 1rem;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-            padding: 2rem;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
         }
-
         h1 {
             color: var(--primary-color);
-            font-weight: 700;
             margin-bottom: 2rem;
             text-align: center;
+            font-weight: 700;
         }
-
         .card {
-            border: none;
-            border-radius: 0.8rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 2rem;
-            overflow: hidden;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-color);
         }
-
         .card-header {
-            background: var(--secondary-color);
-            border-bottom: none;
-            padding: 1rem 1.5rem;
-        }
-
-        .card-title {
-            color: var(--primary-color);
-            margin: 0;
+            background-color: var(--secondary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
             font-weight: 600;
         }
-
-        .code-area {
-            font-family: 'Fira Code', 'Courier New', monospace;
-            background: var(--code-bg);
-            color: var(--code-color);
+        .card-body {
             padding: 1.5rem;
-            border-radius: 0.5rem;
-            white-space: pre;
+        }
+        pre {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 4px;
             overflow-x: auto;
-            font-size: 0.9rem;
-            line-height: 1.5;
+            font-family: 'Fira Code', monospace;
+            position: relative;
         }
-
-        .btn-primary {
-            background: var(--primary-color);
+        .copy-button {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: white;
             border: none;
-            padding: 0.5rem 1.5rem;
-            border-radius: 0.5rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.875rem;
         }
-
-        .btn-primary:hover {
-            background: #357abd;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(74,144,226,0.2);
+        .copy-button:hover {
+            opacity: 0.9;
         }
-
-        /* Instructions styling */
         ol {
             padding-left: 1.2rem;
+            margin-bottom: 1.5rem;
         }
-
-        ol li {
-            margin-bottom: 0.8rem;
-            position: relative;
-            padding-left: 0.5rem;
-        }
-
-        /* Step numbers */
-        .step-number {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-            background: var(--primary-color);
-            color: white;
-            border-radius: 50%;
-            font-size: 0.8rem;
-            margin-right: 0.5rem;
-        }
-
-        /* Keyboard keys */
-        kbd {
-            background: var(--secondary-color);
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            box-shadow: 0 1px 1px rgba(0,0,0,.2);
-            color: var(--text-color);
-            display: inline-block;
-            font-size: 0.85em;
-            font-weight: 600;
-            line-height: 1;
-            padding: 2px 6px;
-            white-space: nowrap;
-        }
-
-        /* Copy button */
-        .copy-icon {
-            transition: transform 0.2s ease;
-        }
-
-        .btn-primary:hover .copy-icon {
-            transform: translateY(-1px);
-        }
-
-        /* Code container */
-        .code-container {
-            position: relative;
-            padding: 0;
-        }
-
-        .code-area {
-            margin: 0;
-            padding: 1.5rem;
-            border-radius: 0;
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            body {
-                padding: 1rem;
-            }
-
-            .container {
-                padding: 1rem;
-            }
-
-            .code-area {
-                font-size: 0.8rem;
-            }
-
-            .step-number {
-                width: 20px;
-                height: 20px;
-                font-size: 0.75rem;
-            }
+        li {
+            margin-bottom: 0.5rem;
         }
     </style>
 </head>
@@ -183,354 +93,189 @@
         <!-- Instructions -->
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title">How to Use</h5>
+                Instructions
             </div>
             <div class="card-body">
                 <ol>
-                    <li><span class="step-number">1</span> Open your Perusall article in Chrome/Firefox</li>
-                    <li><span class="step-number">2</span> Press <kbd>F12</kbd> to open Developer Tools</li>
-                    <li><span class="step-number">3</span> Click on <kbd>Console</kbd> tab</li>
-                    <li><span class="step-number">4</span> Copy and paste the code below</li>
-                    <li><span class="step-number">5</span> Wait for the automatic scrolling to finish</li>
-                    <li><span class="step-number">6</span> Your PDF will be downloaded automatically!</li>
+                    <li>Open your Perusall article in Chrome/Firefox</li>
+                    <li>Press F12 to open Developer Tools</li>
+                    <li>Click on Console tab</li>
+                    <li>Copy and paste the code below into the console</li>
+                    <li>Wait for the PDF to be generated and downloaded</li>
                 </ol>
             </div>
         </div>
 
-        <!-- JavaScript Code -->
+        <!-- Code Section -->
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title">Code to Run</h5>
-                <button class="btn btn-primary" onclick="copyCode()">
-                    <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                    Copy Code
-                </button>
+            <div class="card-header">
+                JavaScript Code
             </div>
-            <div class="card-body code-container">
-                <div class="code-area" id="codeArea">// Load jsPDF
-var script = document.createElement('script');
-script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-document.head.appendChild(script);
-
-var len = 0;
-var times = 0;
-var noNewImagesCount = 0;
-var maxNoNewImages = 10; // Wait longer before concluding scrolling is done
-var lastScrollPosition = 0;
-var sameScrollPositionCount = 0;
-var totalScrollAttempts = 0;
-var maxScrollAttempts = 50; // Maximum number of scroll attempts
-
-console.log('Starting Perusall Article Downloader...');
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function scrollToBottom() {
-    const oldScrollPos = window.scrollY;
-    window.scrollTo(0, document.body.scrollHeight);
-    await sleep(500);
-    return window.scrollY > oldScrollPos;
-}
-
-var i = setInterval(async () => {
-    if (totalScrollAttempts >= maxScrollAttempts) {
-        console.log('Reached maximum scroll attempts, stopping...');
-        clearInterval(i);
-        return;
-    }
-    totalScrollAttempts++;
-
-    var img = document.querySelectorAll("img.chunk");
-    var currentScrollPosition = window.scrollY;
-    
-    // Check if we're stuck at the same scroll position
-    if (currentScrollPosition === lastScrollPosition) {
-        sameScrollPositionCount++;
-        if (sameScrollPositionCount > 3) {
-            // Try different scroll strategies
-            if (await scrollToBottom()) {
-                console.log('Successfully scrolled to new position');
-                sameScrollPositionCount = 0;
-            } else {
-                console.log('Failed to scroll further, might be at the end');
-            }
+            <div class="card-body">
+                <pre><button class="copy-button" onclick="copyCode()">Copy Code</button><code id="codeBlock">void (async function() {
+    try {
+        // Prevent multiple runs
+        if (window.downloaderRunning) {
+            console.log('Downloader already running...');
+            return;
         }
-    } else {
-        sameScrollPositionCount = 0;
-    }
-    lastScrollPosition = currentScrollPosition;
-    
-    // Scroll to the last image
-    if (img.length > 0) {
-        img[img.length-1].scrollIntoView({ behavior: 'smooth' });
-        console.log('Scrolling... Found ' + img.length + ' images so far');
-    }
-    
-    if (len < img.length) {
-        len = img.length;
-        noNewImagesCount = 0; // Reset counter when we find new images
-        console.log('Found new images, total now: ' + len);
-    } else {
-        noNewImagesCount++;
-        console.log('No new images found, attempt ' + noNewImagesCount + ' of ' + maxNoNewImages);
-    }
-    
-    // Only stop if we haven't found new images for a while
-    if (noNewImagesCount >= maxNoNewImages) {
-        clearInterval(i);
-        console.log('Finished scrolling. Found ' + len + ' images total');
+        window.downloaderRunning = true;
+
+        // Load jsPDF if not already loaded
+        if (!window.jspdf) {
+            console.log('Loading jsPDF library...');
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                script.onload = () => {
+                    console.log('jsPDF loaded successfully');
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // Initialize variables
+        let len = 0;
+        let times = 0;
+        let scrollPasses = 0;
+        const maxScrollPasses = 3; // Number of full scroll passes
         
-        // Group images by page number
-        const pageMap = {};
-        img.forEach((e) => {
-            // Debug: log the image URL
-            console.log('Image URL:', e.src);
-            
-            // Try different patterns for page number extraction
-            let pageNum;
-            const patterns = [
-                /page=(\d+)/, // Standard pattern
-                /page\/(\d+)/, // Alternative pattern
-                /p(\d+)\// // Another pattern
-                /page-(\d+)/, // Hyphenated pattern
-                /-p(\d+)-/, // Embedded pattern
-                /_(\d+)\.[^.]+$/, // Trailing number pattern
-                /\/(\d+)\./, // Number before extension
-                /chunk[_-](\d+)/, // Chunk number pattern
-                /section[_-](\d+)/ // Section number pattern
-            ];
-            
-            for (const pattern of patterns) {
-                const match = e.src.match(pattern);
-                if (match) {
-                    pageNum = parseInt(match[1]);
-                    break;
+        // Helper function to load an image
+        const loadImage = (url) => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+        
+        // Scroll and collect images with multiple passes
+        await new Promise((resolve) => {
+            const scrollInterval = setInterval(async () => {
+                const images = document.querySelectorAll('img.chunk');
+                console.log(`Current images: ${images.length}, Last length: ${len}, Times: ${times}, Passes: ${scrollPasses}`);
+                
+                if (images.length > 0) {
+                    images[images.length - 1].scrollIntoView();
                 }
-            }
-            
-            // If no page number found, try data attributes
-            if (!pageNum) {
-                pageNum = e.getAttribute('data-page') || 
-                         e.getAttribute('data-page-number') || 
-                         e.getAttribute('page');
-                if (pageNum) pageNum = parseInt(pageNum);
-            }
-            
-            // If still no page number, try parent elements
-            if (!pageNum) {
-                const parent = e.closest('[data-page], [data-page-number], [page], [data-index]');
-                if (parent) {
-                    const attrs = ['data-page', 'data-page-number', 'page', 'data-index'];
-                    for (const attr of attrs) {
-                        const value = parent.getAttribute(attr);
-                        if (value) {
-                            pageNum = parseInt(value);
-                            console.log(`Found page number ${pageNum} from parent attribute ${attr}`);
-                            break;
+                
+                if (len < images.length) {
+                    len = images.length;
+                    times = 0;
+                } else {
+                    times++;
+                    if (times > 3) {
+                        // Scroll back to top
+                        window.scrollTo(0, 0);
+                        
+                        scrollPasses++;
+                        times = 0;
+                        
+                        if (scrollPasses >= maxScrollPasses) {
+                            clearInterval(scrollInterval);
+                            resolve();
                         }
                     }
                 }
-            }
-            
-            // Try to find page number in nearby elements
-            if (!pageNum) {
-                const nearby = document.elementsFromPoint(e.offsetLeft, e.offsetTop);
-                for (const el of nearby) {
-                    const text = el.textContent;
-                    const match = text.match(/page\s*(\d+)/i);
-                    if (match) {
-                        pageNum = parseInt(match[1]);
-                        console.log(`Found page number ${pageNum} from nearby text`);
-                        break;
-                    }
-                }
-            }
-            
-            // Use vertical position as last resort
-            if (!pageNum) {
-                const rect = e.getBoundingClientRect();
-                const verticalPosition = rect.top + window.scrollY;
-                const imagesBefore = Array.from(img).filter(otherImg => {
-                    const otherRect = otherImg.getBoundingClientRect();
-                    return otherRect.top + window.scrollY < verticalPosition;
-                });
-                pageNum = Math.floor(imagesBefore.length / 2) + 1; // Assuming ~2 chunks per page
-                console.log(`Using position-based page number ${pageNum} as fallback`);
-            }
-            
-            // Debug: log the found page number
-            console.log('Found page number:', pageNum);
-            
-            if (!pageMap[pageNum]) pageMap[pageNum] = [];
-            pageMap[pageNum].push(e);
+            }, 3000);
+        });
+
+        // Get all images
+        const images = Array.from(document.querySelectorAll('img.chunk'));
+        console.log(`Total images found: ${images.length}`);
+        
+        // Group images by their vertical position (6 chunks per group)
+        const chunks = [];
+        let currentChunks = [];
+        
+        // Sort images by their vertical position on the page
+        const sortedImages = images.sort((a, b) => {
+            const rectA = a.getBoundingClientRect();
+            const rectB = b.getBoundingClientRect();
+            return rectA.top - rectB.top;
         });
         
-        // Sort and validate page numbers
-        let sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
-        console.log('Initially found ' + sortedPages.length + ' pages');
-        console.log('Initial page numbers:', sortedPages);
+        // Remove duplicate images by src
+        const uniqueImages = Array.from(new Map(sortedImages.map(img => [img.src, img])).values());
+        console.log(`Unique images found: ${uniqueImages.length}`);
         
-        // Check for missing pages
-        const expectedPages = [];
-        const firstPage = parseInt(sortedPages[0]);
-        const lastPage = parseInt(sortedPages[sortedPages.length - 1]);
-        for (let i = firstPage; i <= lastPage; i++) {
-            expectedPages.push(i);
+        for (const img of uniqueImages) {
+            const loadedImg = await loadImage(img.src);
+            currentChunks.push(loadedImg);
+            
+            if (currentChunks.length === 6) {
+                chunks.push(currentChunks);
+                currentChunks = [];
+            }
         }
         
-        const missingPages = expectedPages.filter(page => !sortedPages.includes(page.toString()));
-        if (missingPages.length > 0) {
-            console.warn('Warning: Missing pages detected:', missingPages);
-            console.warn('This might indicate incomplete scrolling or page detection issues');
+        // Add any remaining chunks
+        if (currentChunks.length > 0) {
+            chunks.push(currentChunks);
+        }
+        
+        console.log(`Organized into ${chunks.length} pages`);
+        
+        // Get article title from various possible locations
+        const title = (
+            document.querySelector('h1.p-title')?.textContent?.trim() || // Try Perusall title class
+            document.querySelector('.p-title')?.textContent?.trim() || // Try without h1
+            document.querySelector('h1')?.textContent?.trim() || // Try any h1
+            document.querySelector('title')?.textContent?.trim() || // Try page title
+            'Perusall_Article'
+        ).replace(/[<>:"/\|?*]/g, '-'); // Remove invalid filename characters
+        
+        // Create PDF using jsPDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'pt',
+            format: [595.28, 841.89] // A4 size in points
+        });
+        
+        // Process each page
+        chunks.forEach((pageChunks, pageIndex) => {
+            if (pageIndex > 0) doc.addPage();
             
-            // Try to recover missing pages
-            missingPages.forEach(missingPage => {
-                console.log(`Attempting to recover page ${missingPage}...`);
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            
+            // Calculate height for each chunk (divide page height by 6)
+            const chunkHeight = pageHeight / 6;
+            
+            // Add each chunk vertically
+            pageChunks.forEach((chunk, index) => {
+                const y = index * chunkHeight;
                 
-                // Look for unassigned chunks
-                const unassignedChunks = Array.from(img).filter(chunk => {
-                    return !Object.values(pageMap).flat().includes(chunk);
-                });
-                
-                if (unassignedChunks.length > 0) {
-                    console.log(`Found ${unassignedChunks.length} unassigned chunks`);
-                    
-                    // Try to find chunks that belong to this page
-                    const prevPage = missingPage - 1;
-                    const nextPage = missingPage + 1;
-                    const prevChunks = pageMap[prevPage] || [];
-                    const nextChunks = pageMap[nextPage] || [];
-                    
-                    // Calculate expected vertical position for this page
-                    const avgChunksPerPage = Math.max(
-                        prevChunks.length || 2,
-                        nextChunks.length || 2
-                    );
-                    
-                    // Sort unassigned chunks by vertical position
-                    unassignedChunks.sort((a, b) => {
-                        const posA = a.getBoundingClientRect().top + window.scrollY;
-                        const posB = b.getBoundingClientRect().top + window.scrollY;
-                        return posA - posB;
-                    });
-                    
-                    // Take chunks that seem to belong to this page
-                    pageMap[missingPage] = unassignedChunks.slice(0, avgChunksPerPage);
-                    console.log(`Assigned ${pageMap[missingPage].length} chunks to page ${missingPage}`);
-                    
-                    // Update sorted pages
-                    sortedPages = Object.keys(pageMap).sort((a,b) => parseInt(a) - parseInt(b));
-                }
+                // Add image to fit full width and calculated height
+                doc.addImage(chunk, 'JPEG', 0, y, pageWidth, chunkHeight);
             });
-        }
-        
-        if (sortedPages.length === 0) {
-            console.error('No pages found! Please check the page number extraction logic.');
-            return;
-        }
-        
-        // Final validation
-        console.log(`Final count: ${sortedPages.length} pages (expected ${expectedPages.length} pages)`);
-        console.log('Page distribution:');
-        sortedPages.forEach(pageNum => {
-            console.log(`Page ${pageNum}: ${pageMap[pageNum].length} chunks`);
         });
         
-        // Create PDF
-        window.jsPDF = window.jspdf.jsPDF;
-        const pdf = new jsPDF();
-        let isFirstPage = true;
+        console.log('Saving PDF...');
+        doc.save(title + '.pdf');
+        window.downloaderRunning = false;
         
-        for (const pageNum of sortedPages) {
-            console.log('Processing page ' + pageNum);
-            const chunks = pageMap[pageNum];
-            console.log('Found ' + chunks.length + ' chunks for page ' + pageNum);
-            
-            // Create canvas for full page
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Calculate full page dimensions
-            let totalHeight = 0;
-            let maxWidth = 0;
-            for (const img of chunks) {
-                totalHeight += img.naturalHeight;
-                maxWidth = Math.max(maxWidth, img.naturalWidth);
-            }
-            
-            console.log('Page dimensions:', maxWidth, 'x', totalHeight);
-            
-            // Set canvas size
-            canvas.width = maxWidth;
-            canvas.height = totalHeight;
-            
-            // Draw chunks in order
-            let y = 0;
-            for (const img of chunks) {
-                ctx.drawImage(img, 0, y);
-                y += img.naturalHeight;
-            }
-            
-            // Add to PDF
-            if (!isFirstPage) pdf.addPage();
-            isFirstPage = false;
-            
-            const imgData = canvas.toDataURL('image/jpeg', 0.8);
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-        }
-        
-        var spl = location.pathname.split('/');
-        pdf.save(spl[spl.length-1] + '.pdf');
-        console.log('PDF saved!');
-    } else {
-        times++;
+    } catch (error) {
+        console.error('Error:', error);
+        window.downloaderRunning = false;
     }
-}, 2000);</div>
+})();</code></pre>
             </div>
         </div>
     </div>
 
     <script>
-        function selectText(node) {
-            if (document.body.createTextRange) {
-                const range = document.body.createTextRange();
-                range.moveToElementText(node);
-                range.select();
-            } else if (window.getSelection) {
-                const selection = window.getSelection();
-                const range = document.createRange();
-                range.selectNodeContents(node);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            }
-        }
-
         function copyCode() {
-            const codeArea = document.getElementById('codeArea');
-            selectText(codeArea);
-            
-            try {
-                const success = document.execCommand('copy');
-                if (success) {
-                    const btn = document.querySelector('button.btn-primary');
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy Code', 2000);
-                } else {
-                    throw new Error('Copy command failed');
-                }
-            } catch (err) {
-                console.error('Copy failed:', err);
-                alert('Please manually copy the selected code (Ctrl+C or Cmd+C)');
-            }
+            const code = document.getElementById('codeBlock').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const button = document.querySelector('.copy-button');
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy Code';
+                }, 2000);
+            });
         }
     </script>
 </body>
