@@ -48,3 +48,17 @@ If you encounter any issues:
 3. Check the browser console for any error messages
 
 For bug reports or feature requests, please [open an issue](https://github.com/lovejzzz/PerusallDownloader/issues).
+
+## Legal Disclaimer
+
+This tool is provided for **PERSONAL EDUCATIONAL USE ONLY**. By using this tool, you agree to:
+
+1. Only use it to download articles that you have legitimate access to through your educational institution
+2. Not share or distribute downloaded materials to others
+3. Not use the tool for commercial purposes
+4. Not share access to this tool publicly or promote it on social media
+5. Respect your institution's policies regarding course materials
+
+The tool is intended solely for individual students to create personal study copies of materials they already have access to. Any other use may violate terms of service or copyright laws.
+
+**Note**: The developers of this tool are not responsible for any misuse or violations of institutional policies or copyright laws.
