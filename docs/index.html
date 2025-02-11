@@ -196,94 +196,99 @@
             img.src = url;
         });
 
-        // Helper function to load images for a specific page
-        const loadPageImages = async (pageNum) => {
-            console.log(`Loading images for page ${pageNum}...`);
-            
-            // Try to find and click page/section links
-            const pageLinks = Array.from(document.querySelectorAll('a, span, div'))
-                .filter(el => {
-                    const text = el.textContent?.toLowerCase() || '';
-                    const href = el.getAttribute('href')?.toLowerCase() || '';
-                    return text.includes(`page ${pageNum}`) || 
-                           href.includes(`page=${pageNum}`) || 
-                           href.includes(`page/${pageNum}`) ||
-                           el.className.includes(`page-${pageNum}`);
-                });
+        // Function to collect all available images
+        const collectAllImages = async () => {
+            console.log('Starting image collection...');
+            const images = new Set();
+            let lastCount = 0;
+            let noNewCount = 0;
+            let attempts = 0;
+            const maxAttempts = 10;
 
-            // Click each potential page link
-            for (const link of pageLinks) {
+            // First, try to load all sections
+            const sections = document.querySelectorAll('[class*="section"], [class*="page"]');
+            console.log(`Found ${sections.length} sections to try loading`);
+            
+            for (const section of sections) {
                 try {
-                    link.click();
-                    await new Promise(r => setTimeout(r, 2000));
-                } catch (e) {
-                    console.log('Could not click page link:', e);
-                }
+                    section.scrollIntoView({ behavior: 'smooth' });
+                    await new Promise(r => setTimeout(r, 1000));
+                    section.click();
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (e) {}
             }
 
-            // Function to check if we have all images for this page
-            const getPageImages = () => {
-                return Array.from(document.querySelectorAll('img.chunk'))
-                    .filter(img => {
-                        const pageMatch = img.src.match(/page[=/]?(\d+)/i);
-                        return pageMatch && parseInt(pageMatch[1]) === pageNum;
-                    });
-            };
+            // Now start collecting images
+            while (noNewCount < 3 && attempts < maxAttempts) {
+                attempts++;
+                console.log(`Collection attempt ${attempts}/${maxAttempts}...`);
 
-            // Try to load images with multiple attempts
-            let attempts = 0;
-            const maxAttempts = 5;
-            let pageImages = getPageImages();
+                // Scroll to different positions
+                const scrollPositions = [
+                    0, // Top
+                    document.body.scrollHeight / 4,
+                    document.body.scrollHeight / 2,
+                    (document.body.scrollHeight * 3) / 4,
+                    document.body.scrollHeight // Bottom
+                ];
 
-            while (attempts < maxAttempts && pageImages.length < 6) {
-                console.log(`Page ${pageNum}: Found ${pageImages.length}/6 images (attempt ${attempts + 1}/${maxAttempts})`);
+                for (const position of scrollPositions) {
+                    window.scrollTo(0, position);
+                    await new Promise(r => setTimeout(r, 1000));
 
-                // Scroll around the current viewport to trigger lazy loading
-                const currentPos = window.pageYOffset;
-                for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += 100) {
-                    window.scrollTo(0, currentPos + offset);
-                    await new Promise(r => setTimeout(r, 500));
-                }
+                    // Get current images
+                    const currentImages = document.querySelectorAll('img.chunk');
+                    const prevSize = images.size;
+                    currentImages.forEach(img => images.add(img));
 
-                // Try clicking on image containers
-                const containers = document.querySelectorAll('.page-container, .section-container, .document-page');
-                for (const container of containers) {
-                    try {
-                        container.click();
-                        await new Promise(r => setTimeout(r, 500));
-                    } catch (e) {
-                        console.log('Could not click container:', e);
+                    if (images.size > prevSize) {
+                        console.log(`Found ${images.size} total images (+${images.size - prevSize} new)`);
+                        noNewCount = 0;
+                    } else {
+                        noNewCount++;
                     }
                 }
 
-                pageImages = getPageImages();
-                if (pageImages.length === 6) break;
-                attempts++;
+                // Try clicking on any navigation elements
+                const navElements = document.querySelectorAll('a[href*="page"], button, .nav-item');
+                for (const el of navElements) {
+                    try {
+                        el.click();
+                        await new Promise(r => setTimeout(r, 500));
+                    } catch (e) {}
+                }
             }
 
-            return pageImages;
+            return Array.from(images);
         };
 
-        // Load images page by page
-        const allImages = [];
-        for (let page = 1; page <= expectedPages; page++) {
-            const pageImages = await loadPageImages(page);
-            allImages.push(...pageImages);
-            console.log(`Page ${page}: Found ${pageImages.length} images (Total: ${allImages.length}/${expectedImages})`);
-            
-            // If we couldn't find any images for this page after multiple attempts, log warning
-            if (pageImages.length === 0) {
-                console.log(`Warning: Could not find any images for page ${page}`);
+        // Collect and organize images
+        console.log('Starting image collection process...');
+        const allImages = await collectAllImages();
+        console.log(`Collection complete. Found ${allImages.length} images.`);
+
+        // Sort images by their vertical position
+        const sortedImages = allImages.sort((a, b) => {
+            const rectA = a.getBoundingClientRect();
+            const rectB = b.getBoundingClientRect();
+            return rectA.top - rectB.top;
+        });
+
+        // Group into pages of 6 images each
+        const pages = [];
+        for (let i = 0; i < sortedImages.length; i += 6) {
+            const pageImages = sortedImages.slice(i, i + 6);
+            if (pageImages.length === 6) {
+                pages.push(pageImages);
             }
         }
 
 
-        // Use the collected images
-        console.log(`Total images found: ${allImages.length} (expecting ${expectedImages} for ${expectedPages} pages)`);
+        // Use the organized pages
+        console.log(`Using ${pages.length * 6} images organized into ${pages.length} complete pages`);
         
-        // Group images by their vertical position (6 chunks per group)
-        const chunks = [];
-        let currentChunks = [];
+        // Use our pre-organized pages
+        const chunks = pages;
         
         // Helper function to get page number from URL or data attributes
         const getPageNumber = (img) => {
