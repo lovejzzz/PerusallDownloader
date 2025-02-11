@@ -219,9 +219,8 @@
 
                 if (newImages > 0) {
                     console.log(`Found ${imageSet.size} total images (+${newImages} new)`);
-                    return newImages;
                 }
-                return 0;
+                return imageSet.size;
             };
 
             // Create a visual indicator
@@ -235,84 +234,54 @@
                 console.log(message);
             };
 
-            // Helper function to wait for page change
-            const waitForPageChange = async (targetPage) => {
-                let waitAttempts = 0;
-                while (waitAttempts < 10) {
-                    const currentPageElem = document.querySelector('.page-number.active, [class*="page"].active');
-                    if (currentPageElem && currentPageElem.textContent.includes(targetPage.toString())) {
-                        return true;
-                    }
-                    await new Promise(r => setTimeout(r, 500));
-                    waitAttempts++;
-                }
-                return false;
-            };
-
             try {
                 updateProgress('Starting image collection...');
-                
-                let currentPage = 1;
-                while (attempts < maxAttempts && imageSet.size < expectedImages) {
+
+                // Initial check for images
+                let totalImages = checkForNewImages();
+                if (totalImages >= expectedImages) {
+                    updateProgress('Found all images immediately!');
+                    return Array.from(imageSet);
+                }
+
+                // Try scrolling through the document
+                while (attempts < maxAttempts && totalImages < expectedImages) {
                     attempts++;
-                    updateProgress(`Navigating to page ${currentPage}...`);
+                    updateProgress(`Collection attempt ${attempts}/${maxAttempts} (${totalImages}/${expectedImages} images)`);
 
-                    // Find and click the page link
+                    // Get all page links
                     const pageLinks = Array.from(document.querySelectorAll('a'))
-                        .filter(a => a.href && a.href.includes(`page=${currentPage}`));
+                        .filter(a => a.href && a.href.includes('page='));
 
-                    if (pageLinks.length > 0) {
-                        pageLinks[0].click();
-                        const pageChanged = await waitForPageChange(currentPage);
-                        if (!pageChanged) {
-                            console.log(`Failed to navigate to page ${currentPage}`);
-                            continue;
-                        }
-                    }
-
-                    await new Promise(r => setTimeout(r, 2000)); // Wait for images to load
-                    let newImagesOnPage = checkForNewImages();
-                    
-                    if (newImagesOnPage === 6) {
-                        updateProgress(`Found complete set of images on page ${currentPage}`);
-                        currentPage++;
-                        continue;
-                    }
-
-                    // If we didn't find all 6 images, try scrolling
-                    const images = document.querySelectorAll('img.chunk');
-                    for (const img of images) {
+                    // Try clicking each page link
+                    for (const link of pageLinks) {
                         try {
-                            updateProgress(`Scrolling on page ${currentPage}...`);
-                            img.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            await new Promise(r => setTimeout(r, 1000));
+                            link.click();
+                            await new Promise(r => setTimeout(r, 300));
                             
-                            // Check above and below
-                            window.scrollBy(0, -100);
-                            await new Promise(r => setTimeout(r, 500));
-                            window.scrollBy(0, 200);
-                            await new Promise(r => setTimeout(r, 500));
-                            
-                            newImagesOnPage = checkForNewImages();
-                            if (newImagesOnPage === 6) break;
+                            // Quick scroll through the document
+                            const scrollHeight = document.documentElement.scrollHeight;
+                            const viewportHeight = window.innerHeight;
+                            const scrollStep = Math.floor(viewportHeight / 2);
+
+                            for (let pos = 0; pos <= scrollHeight; pos += scrollStep) {
+                                window.scrollTo(0, pos);
+                                await new Promise(r => setTimeout(r, 100));
+                                totalImages = checkForNewImages();
+                                
+                                if (totalImages >= expectedImages) {
+                                    updateProgress('Found all expected images!');
+                                    return Array.from(imageSet);
+                                }
+                            }
                         } catch (e) {
-                            console.error('Error scrolling to image:', e);
+                            console.error('Error clicking page link:', e);
                         }
-                    }
-
-                    // Move to next page if we found the expected images
-                    if (newImagesOnPage === 6) {
-                        currentPage++;
-                    }
-
-                    // Check if we have all images
-                    if (imageSet.size >= expectedImages) {
-                        updateProgress('Found all expected images!');
-                        break;
                     }
                 }
+
+                updateProgress(`Collection complete. Found ${totalImages} images.`);
             } finally {
-                // Clean up the indicator
                 document.body.removeChild(indicator);
             }
 
