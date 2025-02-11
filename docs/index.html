@@ -196,41 +196,13 @@
             img.src = url;
         });
 
-        // Function to smoothly scroll to a position
-        const smoothScrollTo = async (position) => {
-            const start = window.pageYOffset;
-            const distance = position - start;
-            const duration = 1000;
-            const startTime = performance.now();
-
-            const easeInOutQuad = (t) => {
-                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-            };
-
-            return new Promise(resolve => {
-                const scroll = (currentTime) => {
-                    const timeElapsed = currentTime - startTime;
-                    const progress = Math.min(timeElapsed / duration, 1);
-
-                    window.scrollTo(0, start + distance * easeInOutQuad(progress));
-
-                    if (progress < 1) {
-                        requestAnimationFrame(scroll);
-                    } else {
-                        resolve();
-                    }
-                };
-                requestAnimationFrame(scroll);
-            });
-        };
-
         // Function to collect all available images
         const collectAllImages = async () => {
             console.log('Starting image collection...');
             const imageSet = new Set();
             let noNewCount = 0;
             let attempts = 0;
-            const maxAttempts = 10;
+            const maxAttempts = 15;
             const expectedImages = 6 * expectedPages; // Calculate total expected images
 
             // Helper function to wait and check for new images
@@ -254,47 +226,76 @@
                 return false;
             };
 
-            // First, do a slow scroll through the entire document
-            console.log('Starting initial slow scroll...');
-            const scrollStep = window.innerHeight / 2;
-            const totalHeight = document.documentElement.scrollHeight;
+            // Helper function to scroll to a position
+            const scrollToPosition = async (position) => {
+                window.scrollTo(0, position);
+                await new Promise(r => setTimeout(r, 3000)); // Wait longer for scroll
+                await waitAndCheckImages(2000); // Check for images
+            };
 
-            // Scroll down slowly
-            for (let pos = 0; pos <= totalHeight; pos += scrollStep) {
-                console.log(`Scrolling to position ${pos}...`);
-                await smoothScrollTo(pos);
-                await waitAndCheckImages(3000); // Wait longer for images to load
+            // Initial scroll to load all content
+            console.log('Initial scroll to load content...');
+            await scrollToPosition(0); // Start at top
+            await scrollToPosition(document.documentElement.scrollHeight); // Go to bottom
+            await scrollToPosition(0); // Back to top
+
+            // Now try to find all page sections
+            const pageLinks = Array.from(document.querySelectorAll('a'))
+                .filter(a => a.href && a.href.includes('page='));
+
+            console.log(`Found ${pageLinks.length} page links to try`);
+
+            // Try clicking each page link
+            for (const link of pageLinks) {
+                try {
+                    console.log('Clicking page link:', link.href);
+                    link.click();
+                    await new Promise(r => setTimeout(r, 3000));
+
+                    // Scroll through the new content
+                    const height = document.documentElement.scrollHeight;
+                    const step = Math.floor(window.innerHeight / 2);
+
+                    for (let pos = 0; pos <= height; pos += step) {
+                        await scrollToPosition(pos);
+                        
+                        // Also try small offsets
+                        await scrollToPosition(Math.max(0, pos - 100));
+                        await scrollToPosition(pos + 100);
+                    }
+
+                    if (imageSet.size >= expectedImages) {
+                        console.log('Found all expected images!');
+                        break;
+                    }
+                } catch (e) {
+                    console.log('Error with page link:', e);
+                }
             }
 
-            // Scroll back up slowly
-            for (let pos = totalHeight; pos >= 0; pos -= scrollStep) {
-                console.log(`Scrolling back to position ${pos}...`);
-                await smoothScrollTo(pos);
-                await waitAndCheckImages(2000);
-            }
-
-            // Now do focused passes on sections where we found images
-            while (noNewCount < 3 && attempts < maxAttempts && imageSet.size < expectedImages) {
+            // If we still don't have all images, try aggressive scrolling
+            while (attempts < maxAttempts && imageSet.size < expectedImages) {
                 attempts++;
-                console.log(`Starting collection attempt ${attempts}/${maxAttempts}...`);
+                console.log(`Additional attempt ${attempts}/${maxAttempts}...`);
 
-                const positions = Array.from(imageSet).map(img => {
-                    const rect = img.getBoundingClientRect();
-                    return window.pageYOffset + rect.top;
-                });
+                const height = document.documentElement.scrollHeight;
+                const step = Math.floor(window.innerHeight / 3);
 
-                // Sort positions and remove duplicates
-                const uniquePositions = [...new Set(positions)].sort((a, b) => a - b);
-
-                for (const pos of uniquePositions) {
-                    // Check above and below each found image
-                    for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += scrollStep) {
-                        const targetPos = Math.max(0, pos + offset);
-                        console.log(`Checking around image at position ${targetPos}...`);
-                        await smoothScrollTo(targetPos);
-                        await waitAndCheckImages(2000);
+                for (let pos = 0; pos <= height; pos += step) {
+                    await scrollToPosition(pos);
+                    
+                    // Try clicking any visible page numbers
+                    const pageNumbers = document.querySelectorAll('.page-number, [class*="page"]');
+                    for (const num of pageNumbers) {
+                        try {
+                            num.click();
+                            await new Promise(r => setTimeout(r, 2000));
+                            await waitAndCheckImages(1000);
+                        } catch (e) {}
                     }
                 }
+
+                if (imageSet.size >= expectedImages) break;
             }
 
             return Array.from(imageSet);
