@@ -189,24 +189,95 @@
         const chunks = [];
         let currentChunks = [];
         
-        // Sort images by their vertical position on the page
-        const sortedImages = images.sort((a, b) => {
-            const rectA = a.getBoundingClientRect();
-            const rectB = b.getBoundingClientRect();
-            return rectA.top - rectB.top;
+        // Helper function to get page number from URL or data attributes
+        const getPageNumber = (img) => {
+            // Try URL patterns first
+            const patterns = [
+                /page=(\d+)/, // Standard pattern
+                /page\/(\d+)/, // Alternative pattern
+                /p(\d+)\//, // Another pattern
+                /page-(\d+)/, // Hyphenated pattern
+                /-p(\d+)-/, // Embedded pattern
+                /_(\d+)\.[^.]+$/, // Trailing number pattern
+                /\/(\d+)\./, // Number before extension
+                /chunk[_-](\d+)/, // Chunk number pattern
+                /section[_-](\d+)/, // Section number pattern
+            ];
+            
+            // Try each pattern
+            for (const pattern of patterns) {
+                const match = img.src.match(pattern);
+                if (match) {
+                    return parseInt(match[1]);
+                }
+            }
+            
+            // Try data attributes
+            const dataAttrs = ['data-page', 'data-page-number', 'page', 'data-index'];
+            for (const attr of dataAttrs) {
+                const value = img.getAttribute(attr);
+                if (value) {
+                    return parseInt(value);
+                }
+            }
+            
+            // If no page number found, use position
+            return null;
+        };
+
+        // Wait for all images to load and get their positions
+        const imagePositions = await Promise.all(images.map(async (img) => {
+            // Get absolute position
+            const rect = img.getBoundingClientRect();
+            const absoluteTop = rect.top + window.pageYOffset;
+            
+            // Get page number
+            const pageNum = getPageNumber(img);
+            
+            return {
+                img,
+                top: absoluteTop,
+                pageNum,
+                src: img.src
+            };
+        }));
+
+        // Sort images by page number first, then by position
+        const sortedPositions = imagePositions.sort((a, b) => {
+            // If both have page numbers, use those
+            if (a.pageNum !== null && b.pageNum !== null) {
+                return a.pageNum - b.pageNum;
+            }
+            // If only one has a page number, prioritize it
+            if (a.pageNum !== null) return -1;
+            if (b.pageNum !== null) return 1;
+            // If neither has a page number, use position
+            return a.top - b.top;
         });
+
+        // Remove duplicates by src while preserving order
+        const seen = new Set();
+        const uniquePositions = sortedPositions.filter(pos => {
+            if (seen.has(pos.src)) return false;
+            seen.add(pos.src);
+            return true;
+        });
+
+        console.log(`Unique images found: ${uniquePositions.length}`);
         
-        // Remove duplicate images by src
-        const uniqueImages = Array.from(new Map(sortedImages.map(img => [img.src, img])).values());
-        console.log(`Unique images found: ${uniqueImages.length}`);
-        
-        for (const img of uniqueImages) {
-            const loadedImg = await loadImage(img.src);
+        // Load and group images
+        for (const pos of uniquePositions) {
+            const loadedImg = await loadImage(pos.src);
             currentChunks.push(loadedImg);
             
             if (currentChunks.length === 6) {
                 chunks.push(currentChunks);
                 currentChunks = [];
+            }
+            
+            // Log the page number if available
+            if (pos.pageNum !== null) {
+                console.log(`Added image from page ${pos.pageNum}`);
             }
         }
         
