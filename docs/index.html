@@ -196,91 +196,64 @@
             img.src = url;
         });
 
-        // Helper function to scroll in smaller increments
-        const smoothScroll = async (targetY) => {
-            const startY = window.pageYOffset;
-            const distance = targetY - startY;
-            const duration = 1000;
-            const steps = 20;
-            const stepSize = distance / steps;
+        // Helper function to scroll through document systematically
+        const systematicScroll = async () => {
+            // First, scroll to top
+            window.scrollTo(0, 0);
+            await new Promise(r => setTimeout(r, 1000));
 
-            for (let i = 1; i <= steps; i++) {
-                const y = startY + (stepSize * i);
-                window.scrollTo(0, y);
-                await new Promise(r => setTimeout(r, duration / steps));
+            // Get document height
+            const docHeight = Math.max(
+                document.body.scrollHeight,
+                document.documentElement.scrollHeight
+            );
+
+            // Scroll in smaller increments
+            const increment = window.innerHeight / 2; // Half a viewport height
+            for (let position = 0; position < docHeight; position += increment) {
+                window.scrollTo(0, position);
+                await new Promise(r => setTimeout(r, 500)); // Wait for images to load
             }
+
+            // Scroll to bottom
+            window.scrollTo(0, docHeight);
+            await new Promise(r => setTimeout(r, 1000));
         };
 
         // Scroll and collect images
-        await new Promise((resolve) => {
-            const scrollInterval = setInterval(async () => {
+        await new Promise(async (resolve) => {
+            let scrollAttempts = 0;
+            const maxAttempts = 3;
+
+            while (scrollAttempts < maxAttempts) {
                 const images = document.querySelectorAll('img.chunk');
-                const currentPosition = window.pageYOffset;
-                
-                // Log progress
-                console.log(`Current images: ${images.length}/${expectedImages}, No new images: ${noNewImagesCount}/${maxNoNewImages}`);
-                
-                // If we haven't found enough images and haven't seen new ones in a while
-                if (images.length < expectedImages && noNewImagesCount >= maxNoNewImages) {
-                    // Try more aggressive scrolling
-                    console.log('Trying aggressive scroll...');
-                    window.scrollTo(0, 0);
-                    await new Promise(r => setTimeout(r, 1000));
-                    window.scrollTo(0, document.body.scrollHeight);
-                    await new Promise(r => setTimeout(r, 1000));
-                    noNewImagesCount = 0; // Reset counter
-                }
-                
-                // If we've found all images or tried everything
-                if (images.length >= expectedImages || noNewImagesCount >= maxNoNewImages * 2) {
-                    console.log(`Finishing with ${images.length}/${expectedImages} images`);
-                    clearInterval(scrollInterval);
-                    resolve();
-                    return;
+                console.log(`Pass ${scrollAttempts + 1}/${maxAttempts}: Found ${images.length}/${expectedImages} images`);
+
+                if (images.length >= expectedImages) {
+                    console.log('Found all expected images!');
+                    break;
                 }
 
+                // Systematic scroll
+                await systematicScroll();
 
-                
-                // Check if we're stuck at the same position
-                if (Math.abs(currentPosition - lastScrollPosition) < 10) {
-                    samePositionCount++;
-                    if (samePositionCount >= maxSamePosition) {
-                        // Try scrolling a larger distance
-                        const newPosition = currentPosition + window.innerHeight * 2;
-                        await smoothScroll(newPosition);
-                        samePositionCount = 0;
-                    }
+                // Check if we got new images
+                const newImages = document.querySelectorAll('img.chunk');
+                if (newImages.length === images.length) {
+                    console.log('No new images found in this pass');
+                    scrollAttempts++;
                 } else {
-                    samePositionCount = 0;
-                }
-                lastScrollPosition = currentPosition;
-
-                // If we have images, try to scroll to the last one
-                if (images.length > 0) {
-                    const lastImage = images[images.length - 1];
-                    lastImage.scrollIntoView({ behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 1000)); // Wait for scroll
+                    console.log(`Found ${newImages.length - images.length} new images`);
+                    scrollAttempts = 0; // Reset attempts if we found new images
                 }
 
-                if (len < images.length) {
-                    len = images.length;
-                    noNewImagesCount = 0;
-                    console.log('Found new images, total:', len);
-                } else {
-                    noNewImagesCount++;
-                    if (noNewImagesCount >= maxNoNewImages) {
-                        // Try scrolling back to top and then to bottom
-                        window.scrollTo(0, 0);
-                        await new Promise(r => setTimeout(r, 2000));
-                        window.scrollTo(0, document.body.scrollHeight);
-                        await new Promise(r => setTimeout(r, 2000));
-                        noNewImagesCount = 0;
-                    }
-                }
+                // Small delay before next attempt
+                await new Promise(r => setTimeout(r, 1000));
+            }
 
-
-            }, 2000);
+            resolve();
         });
+
 
         // Get all images and ensure we have enough
         const images = Array.from(document.querySelectorAll('img.chunk'));
