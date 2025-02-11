@@ -201,6 +201,7 @@
             console.log('Starting image collection...');
             const imageSet = new Set();
             const expectedImages = 6 * expectedPages; // Calculate total expected images
+            let currentPage = 1;
 
             // Helper function to check for new images
             const checkForNewImages = () => {
@@ -221,6 +222,33 @@
                 return newImages;
             };
 
+            // Helper function to click next button
+            const clickNextButton = async () => {
+                const nextButton = Array.from(document.querySelectorAll('a'))
+                    .find(a => a.textContent.includes('Next'));
+                if (nextButton) {
+                    nextButton.click();
+                    return true;
+                }
+                return false;
+            };
+
+            // Helper function to scroll through content
+            const scrollThroughContent = async () => {
+                const scrollHeight = document.documentElement.scrollHeight;
+                const viewportHeight = window.innerHeight;
+                const scrollStep = Math.floor(viewportHeight / 3);
+                let foundImages = 0;
+
+                for (let pos = 0; pos <= scrollHeight && foundImages < 6; pos += scrollStep) {
+                    window.scrollTo(0, pos);
+                    await new Promise(r => setTimeout(r, 300));
+                    foundImages += checkForNewImages();
+                }
+
+                return foundImages;
+            };
+
             // Create a visual indicator
             const indicator = document.createElement('div');
             indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: yellow; padding: 10px; z-index: 9999;';
@@ -235,49 +263,24 @@
             try {
                 updateProgress('Starting image collection...');
 
-                // Initial check for images
-                let totalImages = checkForNewImages();
-                if (totalImages >= expectedImages) {
-                    updateProgress('Found all images immediately!');
-                    return Array.from(imageSet);
-                }
+                while (imageSet.size < expectedImages && currentPage <= expectedPages) {
+                    updateProgress(`Processing page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
 
-                // Find all page links first
-                const pageLinks = Array.from(document.querySelectorAll('a'))
-                    .filter(a => a.href && a.href.includes('page='))
-                    .sort((a, b) => {
-                        const pageA = parseInt(new URL(a.href).searchParams.get('page')) || 0;
-                        const pageB = parseInt(new URL(b.href).searchParams.get('page')) || 0;
-                        return pageA - pageB;
-                    });
+                    // Try to find images on the current page
+                    let foundImages = await scrollThroughContent();
 
-                // Process each page
-                for (const link of pageLinks) {
-                    const pageNum = parseInt(new URL(link.href).searchParams.get('page'));
-                    updateProgress(`Processing page ${pageNum} (${imageSet.size}/${expectedImages} images)`);
-
-                    // Click the page link
-                    link.click();
-                    await new Promise(r => setTimeout(r, 1000));
-
-                    // Initial check for images
-                    let newImages = checkForNewImages();
-                    if (newImages === 0) {
-                        // Try scrolling if no new images found
-                        const scrollHeight = document.documentElement.scrollHeight;
-                        const viewportHeight = window.innerHeight;
-                        const scrollStep = Math.floor(viewportHeight / 3);
-
-                        for (let pos = 0; pos <= scrollHeight && newImages < 6; pos += scrollStep) {
-                            window.scrollTo(0, pos);
-                            await new Promise(r => setTimeout(r, 300));
-                            newImages = checkForNewImages();
-                        }
+                    if (foundImages === 0) {
+                        // If no images found, try scrolling again more slowly
+                        window.scrollTo(0, 0);
+                        await new Promise(r => setTimeout(r, 500));
+                        foundImages = await scrollThroughContent();
                     }
 
-                    // If we have all images, we can stop
-                    if (imageSet.size >= expectedImages) {
-                        updateProgress('Found all expected images!');
+                    // Move to next page
+                    if (await clickNextButton()) {
+                        currentPage++;
+                        await new Promise(r => setTimeout(r, 1000));
+                    } else {
                         break;
                     }
                 }
@@ -287,7 +290,8 @@
                 document.body.removeChild(indicator);
             }
 
-            return Array.from(imageSet);
+            const collectedImages = Array.from(imageSet);
+            return collectedImages;
         };
 
         // Collect and organize images
