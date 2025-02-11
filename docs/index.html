@@ -308,15 +308,23 @@
             ctx.drawImage(img, 0, 0);
             return {
                 dataUrl: canvas.toDataURL('image/jpeg'),
-                top: img.getBoundingClientRect().top
+                top: img.getBoundingClientRect().top,
+                pageNum: getPageNumber(img)
             };
         });
 
         // Wait for all images to be processed
         const processedImages = await Promise.all(imageDataPromises);
 
-        // Sort by vertical position
-        const sortedImages = processedImages.sort((a, b) => a.top - b.top);
+        // Sort by page number first, then vertical position
+        const sortedImages = processedImages.sort((a, b) => {
+            if (a.pageNum !== null && b.pageNum !== null) {
+                if (a.pageNum !== b.pageNum) {
+                    return a.pageNum - b.pageNum;
+                }
+            }
+            return a.top - b.top;
+        });
 
         // Group into pages of 6 images each
         const pages = [];
@@ -361,6 +369,8 @@
                     return parseInt(value);
                 }
             }
+            
+            return null; // Return null if no page number found
             
             // If no page number found, use position
             return null;
