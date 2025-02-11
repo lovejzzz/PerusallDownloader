@@ -1,6 +1,6 @@
 # Perusall Article Downloader
 
-A web-based tool to download articles from Perusall as PDFs. Access it here: [Perusall Article Downloader](https://lovejzzz.github.io/PerusallDownloader/)
+A simple web-based tool to download articles from Perusall as PDFs. Access it here: [Perusall Article Downloader](https://lovejzzz.github.io/PerusallDownloader/)
 
 ## How to Use
 
@@ -8,25 +8,22 @@ A web-based tool to download articles from Perusall as PDFs. Access it here: [Pe
 2. Open your Perusall article in Chrome/Firefox
 3. Press F12 to open Developer Tools
 4. Click on Console tab
-5. Copy the JavaScript code from the website
+5. Copy the JavaScript code from the website using the "Copy Code" button
 6. Paste it into your browser's console
-7. Wait for the code to finish running (it will scroll through the article)
-8. Look for the green "Copy Download Info" button in the top-right corner
-9. Click the button to copy the article information
-10. Go back to the Perusall Article Downloader website
-11. Paste the copied information into the input area
-12. Click "Download Article" and wait for processing
-13. When it reaches 100%, click the green "Download PDF" button
-14. Your PDF will download with the article's title as the filename
+7. Wait for the code to finish running
+   - It will automatically scroll through the article multiple times to ensure all images are loaded
+   - The console will show progress updates
+8. When complete, the PDF will automatically download with the article's title as the filename
 
 ## Features
 
-- Easy-to-use web interface
+- Simple one-page interface
 - No installation required
-- Automatic article scrolling
-- One-click copy functionality
-- Progress tracking
-- Downloads as PDF with article title as filename
+- Automatic article scrolling with multiple passes
+- Smart image deduplication
+- Organized PDF layout (6 images per page)
+- Automatic PDF generation
+- Downloads with article title as filename
 - Works with any Perusall article
 
 ## Technical Requirements
@@ -35,15 +32,19 @@ A web-based tool to download articles from Perusall as PDFs. Access it here: [Pe
 - JavaScript enabled
 - Access to Perusall
 
-## Privacy
+## Privacy & Security
 
-This tool runs entirely in your browser. Your article information is only used for the download process and is not stored or shared.
+This tool:
+- Runs entirely in your browser
+- Uses no external servers
+- Doesn't store or transmit any data
+- Is open source and auditable
 
 ## Issues
 
-If you encounter any issues, please:
-1. Make sure you copied the entire console output (including the START and END markers)
-2. Check that your browser's JavaScript is enabled
-3. Try refreshing the page and starting over
+If you encounter any issues:
+1. Make sure JavaScript is enabled in your browser
+2. Allow the tool to finish scrolling (it makes multiple passes)
+3. Check the browser console for any error messages
 
 For bug reports or feature requests, please [open an issue](https://github.com/lovejzzz/PerusallDownloader/issues).
