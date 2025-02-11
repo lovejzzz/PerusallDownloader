@@ -198,9 +198,20 @@
 
         // Helper function to scroll through document systematically
         const systematicScroll = async () => {
-            // First, scroll to top
+            // First, scroll to top and wait
             window.scrollTo(0, 0);
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Try clicking on all section links to force load
+            const sections = document.querySelectorAll('a[href*="section"], a[href*="page"], .section-link, .page-link');
+            for (const section of sections) {
+                try {
+                    section.click();
+                    await new Promise(r => setTimeout(r, 1000));
+                } catch (e) {
+                    console.log('Could not click section:', e);
+                }
+            }
 
             // Get document height
             const docHeight = Math.max(
@@ -208,22 +219,39 @@
                 document.documentElement.scrollHeight
             );
 
-            // Scroll in smaller increments
-            const increment = window.innerHeight / 2; // Half a viewport height
+            // Scroll in very small increments
+            const increment = window.innerHeight / 4; // Quarter viewport height
             for (let position = 0; position < docHeight; position += increment) {
                 window.scrollTo(0, position);
-                await new Promise(r => setTimeout(r, 500)); // Wait for images to load
+                await new Promise(r => setTimeout(r, 1000)); // Wait longer for images
+
+                // Try to force load images in viewport
+                const visibleImages = Array.from(document.querySelectorAll('img.chunk')).filter(img => {
+                    const rect = img.getBoundingClientRect();
+                    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+                });
+
+                for (const img of visibleImages) {
+                    try {
+                        // Try to force load by clicking near the image
+                        img.parentElement?.click();
+                        await new Promise(r => setTimeout(r, 500));
+                    } catch (e) {
+                        console.log('Could not click image parent:', e);
+                    }
+                }
             }
 
-            // Scroll to bottom
+            // Scroll to bottom and wait
             window.scrollTo(0, docHeight);
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 2000));
         };
 
         // Scroll and collect images
         await new Promise(async (resolve) => {
             let scrollAttempts = 0;
-            const maxAttempts = 3;
+            const maxAttempts = 5; // Increase attempts
+            let lastImageCount = 0;
 
             while (scrollAttempts < maxAttempts) {
                 const images = document.querySelectorAll('img.chunk');
@@ -234,21 +262,33 @@
                     break;
                 }
 
+                // Try to trigger more image loads
+                const sections = document.querySelectorAll('.document-section, .page-section');
+                for (const section of sections) {
+                    try {
+                        section.scrollIntoView({ behavior: 'smooth' });
+                        await new Promise(r => setTimeout(r, 1000));
+                    } catch (e) {
+                        console.log('Could not scroll to section:', e);
+                    }
+                }
+
                 // Systematic scroll
                 await systematicScroll();
 
                 // Check if we got new images
                 const newImages = document.querySelectorAll('img.chunk');
-                if (newImages.length === images.length) {
+                if (newImages.length === lastImageCount) {
                     console.log('No new images found in this pass');
                     scrollAttempts++;
                 } else {
-                    console.log(`Found ${newImages.length - images.length} new images`);
-                    scrollAttempts = 0; // Reset attempts if we found new images
+                    console.log(`Found ${newImages.length - lastImageCount} new images`);
+                    lastImageCount = newImages.length;
+                    if (scrollAttempts > 0) scrollAttempts--; // Give one more chance if we found images
                 }
 
-                // Small delay before next attempt
-                await new Promise(r => setTimeout(r, 1000));
+                // Longer delay before next attempt
+                await new Promise(r => setTimeout(r, 2000));
             }
 
             resolve();
