@@ -201,62 +201,42 @@
             console.log('Starting image collection...');
             const images = new Set();
             let lastCount = 0;
-            let noNewCount = 0;
             let attempts = 0;
-            const maxAttempts = 10;
+            const maxAttempts = 5;
 
-            // First, try to load all sections
-            const sections = document.querySelectorAll('[class*="section"], [class*="page"]');
-            console.log(`Found ${sections.length} sections to try loading`);
-            
-            for (const section of sections) {
-                try {
-                    section.scrollIntoView({ behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 1000));
-                    section.click();
-                    await new Promise(r => setTimeout(r, 500));
-                } catch (e) {}
-            }
+            // First, scroll through the document to trigger lazy loading
+            const scrollHeight = document.documentElement.scrollHeight;
+            const viewportHeight = window.innerHeight;
+            const scrollStep = Math.floor(viewportHeight / 2);
 
-            // Now start collecting images
-            while (noNewCount < 3 && attempts < maxAttempts) {
+            while (attempts < maxAttempts) {
                 attempts++;
                 console.log(`Collection attempt ${attempts}/${maxAttempts}...`);
 
-                // Scroll to different positions
-                const scrollPositions = [
-                    0, // Top
-                    document.body.scrollHeight / 4,
-                    document.body.scrollHeight / 2,
-                    (document.body.scrollHeight * 3) / 4,
-                    document.body.scrollHeight // Bottom
-                ];
+                // Scroll from top to bottom in smaller steps
+                for (let scrollPos = 0; scrollPos <= scrollHeight; scrollPos += scrollStep) {
+                    window.scrollTo(0, scrollPos);
+                    await new Promise(r => setTimeout(r, 500));
 
-                for (const position of scrollPositions) {
-                    window.scrollTo(0, position);
-                    await new Promise(r => setTimeout(r, 1000));
-
-                    // Get current images
+                    // Get all images in the current viewport
                     const currentImages = document.querySelectorAll('img.chunk');
                     const prevSize = images.size;
                     currentImages.forEach(img => images.add(img));
 
                     if (images.size > prevSize) {
                         console.log(`Found ${images.size} total images (+${images.size - prevSize} new)`);
-                        noNewCount = 0;
-                    } else {
-                        noNewCount++;
+                    }
+
+                    // If we have all expected images, we can stop
+                    if (images.size >= expectedImages) {
+                        console.log('Found all expected images!');
+                        return Array.from(images);
                     }
                 }
 
-                // Try clicking on any navigation elements
-                const navElements = document.querySelectorAll('a[href*="page"], button, .nav-item');
-                for (const el of navElements) {
-                    try {
-                        el.click();
-                        await new Promise(r => setTimeout(r, 500));
-                    } catch (e) {}
-                }
+                // Scroll back to top for next attempt
+                window.scrollTo(0, 0);
+                await new Promise(r => setTimeout(r, 1000));
             }
 
             return Array.from(images);
