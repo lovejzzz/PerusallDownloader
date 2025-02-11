@@ -284,9 +284,7 @@
 
         // Get all images and ensure we have enough
         const images = Array.from(document.querySelectorAll('img.chunk'));
-        const targetPages = expectedPages || 33; // Use detected pages or fallback to 33
-        const expectedImages = targetPages * 6;
-        console.log(`Total images found: ${images.length} (expecting ~${expectedImages} for ${targetPages} pages)`);
+        console.log(`Total images found: ${images.length} (expecting ${expectedImages} for ${expectedPages} pages)`);
         
         // Group images by their vertical position (6 chunks per group)
         const chunks = [];
