@@ -196,108 +196,90 @@
             img.src = url;
         });
 
-        // Helper function to scroll through document systematically
-        const systematicScroll = async () => {
-            // First, scroll to top and wait
-            window.scrollTo(0, 0);
-            await new Promise(r => setTimeout(r, 2000));
-
-            // Try clicking on all section links to force load
-            const sections = document.querySelectorAll('a[href*="section"], a[href*="page"], .section-link, .page-link');
-            for (const section of sections) {
-                try {
-                    section.click();
-                    await new Promise(r => setTimeout(r, 1000));
-                } catch (e) {
-                    console.log('Could not click section:', e);
-                }
-            }
-
-            // Get document height
-            const docHeight = Math.max(
-                document.body.scrollHeight,
-                document.documentElement.scrollHeight
-            );
-
-            // Scroll in very small increments
-            const increment = window.innerHeight / 4; // Quarter viewport height
-            for (let position = 0; position < docHeight; position += increment) {
-                window.scrollTo(0, position);
-                await new Promise(r => setTimeout(r, 1000)); // Wait longer for images
-
-                // Try to force load images in viewport
-                const visibleImages = Array.from(document.querySelectorAll('img.chunk')).filter(img => {
-                    const rect = img.getBoundingClientRect();
-                    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+        // Helper function to load images for a specific page
+        const loadPageImages = async (pageNum) => {
+            console.log(`Loading images for page ${pageNum}...`);
+            
+            // Try to find and click page/section links
+            const pageLinks = Array.from(document.querySelectorAll('a, span, div'))
+                .filter(el => {
+                    const text = el.textContent?.toLowerCase() || '';
+                    const href = el.getAttribute('href')?.toLowerCase() || '';
+                    return text.includes(`page ${pageNum}`) || 
+                           href.includes(`page=${pageNum}`) || 
+                           href.includes(`page/${pageNum}`) ||
+                           el.className.includes(`page-${pageNum}`);
                 });
 
-                for (const img of visibleImages) {
+            // Click each potential page link
+            for (const link of pageLinks) {
+                try {
+                    link.click();
+                    await new Promise(r => setTimeout(r, 2000));
+                } catch (e) {
+                    console.log('Could not click page link:', e);
+                }
+            }
+
+            // Function to check if we have all images for this page
+            const getPageImages = () => {
+                return Array.from(document.querySelectorAll('img.chunk'))
+                    .filter(img => {
+                        const pageMatch = img.src.match(/page[=/]?(\d+)/i);
+                        return pageMatch && parseInt(pageMatch[1]) === pageNum;
+                    });
+            };
+
+            // Try to load images with multiple attempts
+            let attempts = 0;
+            const maxAttempts = 5;
+            let pageImages = getPageImages();
+
+            while (attempts < maxAttempts && pageImages.length < 6) {
+                console.log(`Page ${pageNum}: Found ${pageImages.length}/6 images (attempt ${attempts + 1}/${maxAttempts})`);
+
+                // Scroll around the current viewport to trigger lazy loading
+                const currentPos = window.pageYOffset;
+                for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += 100) {
+                    window.scrollTo(0, currentPos + offset);
+                    await new Promise(r => setTimeout(r, 500));
+                }
+
+                // Try clicking on image containers
+                const containers = document.querySelectorAll('.page-container, .section-container, .document-page');
+                for (const container of containers) {
                     try {
-                        // Try to force load by clicking near the image
-                        img.parentElement?.click();
+                        container.click();
                         await new Promise(r => setTimeout(r, 500));
                     } catch (e) {
-                        console.log('Could not click image parent:', e);
+                        console.log('Could not click container:', e);
                     }
                 }
+
+                pageImages = getPageImages();
+                if (pageImages.length === 6) break;
+                attempts++;
             }
 
-            // Scroll to bottom and wait
-            window.scrollTo(0, docHeight);
-            await new Promise(r => setTimeout(r, 2000));
+            return pageImages;
         };
 
-        // Scroll and collect images
-        await new Promise(async (resolve) => {
-            let scrollAttempts = 0;
-            const maxAttempts = 5; // Increase attempts
-            let lastImageCount = 0;
-
-            while (scrollAttempts < maxAttempts) {
-                const images = document.querySelectorAll('img.chunk');
-                console.log(`Pass ${scrollAttempts + 1}/${maxAttempts}: Found ${images.length}/${expectedImages} images`);
-
-                if (images.length >= expectedImages) {
-                    console.log('Found all expected images!');
-                    break;
-                }
-
-                // Try to trigger more image loads
-                const sections = document.querySelectorAll('.document-section, .page-section');
-                for (const section of sections) {
-                    try {
-                        section.scrollIntoView({ behavior: 'smooth' });
-                        await new Promise(r => setTimeout(r, 1000));
-                    } catch (e) {
-                        console.log('Could not scroll to section:', e);
-                    }
-                }
-
-                // Systematic scroll
-                await systematicScroll();
-
-                // Check if we got new images
-                const newImages = document.querySelectorAll('img.chunk');
-                if (newImages.length === lastImageCount) {
-                    console.log('No new images found in this pass');
-                    scrollAttempts++;
-                } else {
-                    console.log(`Found ${newImages.length - lastImageCount} new images`);
-                    lastImageCount = newImages.length;
-                    if (scrollAttempts > 0) scrollAttempts--; // Give one more chance if we found images
-                }
-
-                // Longer delay before next attempt
-                await new Promise(r => setTimeout(r, 2000));
+        // Load images page by page
+        const allImages = [];
+        for (let page = 1; page <= expectedPages; page++) {
+            const pageImages = await loadPageImages(page);
+            allImages.push(...pageImages);
+            console.log(`Page ${page}: Found ${pageImages.length} images (Total: ${allImages.length}/${expectedImages})`);
+            
+            // If we couldn't find any images for this page after multiple attempts, log warning
+            if (pageImages.length === 0) {
+                console.log(`Warning: Could not find any images for page ${page}`);
             }
-
-            resolve();
-        });
+        }
 
 
-        // Get all images and ensure we have enough
-        const images = Array.from(document.querySelectorAll('img.chunk'));
-        console.log(`Total images found: ${images.length} (expecting ${expectedImages} for ${expectedPages} pages)`);
+        // Use the collected images
+        console.log(`Total images found: ${allImages.length} (expecting ${expectedImages} for ${expectedPages} pages)`);
         
         // Group images by their vertical position (6 chunks per group)
         const chunks = [];
