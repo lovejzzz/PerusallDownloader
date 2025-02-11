@@ -294,6 +294,41 @@
             return collectedImages;
         };
 
+        // Helper function to get page number from URL or data attributes
+        const getPageNumber = (img) => {
+            // Try URL patterns first
+            const patterns = [
+                /page=(\d+)/, // Standard pattern
+                /page\/(\d+)/, // Alternative pattern
+                /p(\d+)\//, // Another pattern
+                /page-(\d+)/, // Hyphenated pattern
+                /-p(\d+)-/, // Embedded pattern
+                /_(\d+)\.[^.]+$/, // Trailing number pattern
+                /\/(\d+)\./, // Number before extension
+                /chunk[_-](\d+)/, // Chunk number pattern
+                /section[_-](\d+)/, // Section number pattern
+            ];
+            
+            // Try each pattern
+            for (const pattern of patterns) {
+                const match = img.src.match(pattern);
+                if (match) {
+                    return parseInt(match[1]);
+                }
+            }
+            
+            // Try data attributes
+            const dataAttrs = ['data-page', 'data-page-number', 'page', 'data-index'];
+            for (const attr of dataAttrs) {
+                const value = img.getAttribute(attr);
+                if (value) {
+                    return parseInt(value);
+                }
+            }
+            
+            return null; // Return null if no page number found
+        };
+
         // Collect and organize images
         console.log('Starting image collection process...');
         const allImages = await collectAllImages();
