@@ -200,14 +200,12 @@
         const collectAllImages = async () => {
             console.log('Starting image collection...');
             const imageSet = new Set();
-            let noNewCount = 0;
             let attempts = 0;
             const maxAttempts = 15;
             const expectedImages = 6 * expectedPages; // Calculate total expected images
 
-            // Helper function to wait and check for new images
-            const waitAndCheckImages = async (waitTime) => {
-                await new Promise(r => setTimeout(r, waitTime));
+            // Helper function to check for new images
+            const checkForNewImages = () => {
                 const currentImages = document.querySelectorAll('img.chunk');
                 const prevSize = imageSet.size;
 
@@ -219,83 +217,77 @@
 
                 if (imageSet.size > prevSize) {
                     console.log(`Found ${imageSet.size} total images (+${imageSet.size - prevSize} new)`);
-                    noNewCount = 0;
                     return true;
                 }
-                noNewCount++;
                 return false;
             };
 
-            // Helper function to scroll to a position
-            const scrollToPosition = async (position) => {
-                window.scrollTo(0, position);
-                await new Promise(r => setTimeout(r, 3000)); // Wait longer for scroll
-                await waitAndCheckImages(2000); // Check for images
+            // Create a visual indicator
+            const indicator = document.createElement('div');
+            indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: yellow; padding: 10px; z-index: 9999;';
+            document.body.appendChild(indicator);
+
+            // Helper function to update progress
+            const updateProgress = (message) => {
+                indicator.textContent = message;
+                console.log(message);
             };
 
-            // Initial scroll to load all content
-            console.log('Initial scroll to load content...');
-            await scrollToPosition(0); // Start at top
-            await scrollToPosition(document.documentElement.scrollHeight); // Go to bottom
-            await scrollToPosition(0); // Back to top
+            try {
+                // First pass: scroll through all content
+                updateProgress('Scrolling through content...');
+                
+                let currentPage = 1;
+                while (attempts < maxAttempts && imageSet.size < expectedImages) {
+                    attempts++;
+                    updateProgress(`Checking page ${currentPage} (Attempt ${attempts}/${maxAttempts})`);
 
-            // Now try to find all page sections
-            const pageLinks = Array.from(document.querySelectorAll('a'))
-                .filter(a => a.href && a.href.includes('page='));
+                    // Try to find and click the page link
+                    const pageLinks = Array.from(document.querySelectorAll('a'))
+                        .filter(a => a.href && a.href.includes(`page=${currentPage}`));
 
-            console.log(`Found ${pageLinks.length} page links to try`);
-
-            // Try clicking each page link
-            for (const link of pageLinks) {
-                try {
-                    console.log('Clicking page link:', link.href);
-                    link.click();
-                    await new Promise(r => setTimeout(r, 3000));
-
-                    // Scroll through the new content
-                    const height = document.documentElement.scrollHeight;
-                    const step = Math.floor(window.innerHeight / 2);
-
-                    for (let pos = 0; pos <= height; pos += step) {
-                        await scrollToPosition(pos);
-                        
-                        // Also try small offsets
-                        await scrollToPosition(Math.max(0, pos - 100));
-                        await scrollToPosition(pos + 100);
+                    if (pageLinks.length > 0) {
+                        pageLinks[0].click();
+                        await new Promise(r => setTimeout(r, 2000));
                     }
 
+                    // Get all img elements on the page
+                    const images = document.querySelectorAll('img.chunk');
+                    updateProgress(`Found ${images.length} images on page ${currentPage}`);
+
+                    // Scroll to each image with a delay
+                    for (const img of images) {
+                        try {
+                            updateProgress(`Scrolling to image on page ${currentPage}...`);
+                            img.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            await new Promise(r => setTimeout(r, 1000));
+                            checkForNewImages();
+
+                            // Try scrolling slightly above and below
+                            window.scrollBy(0, -100);
+                            await new Promise(r => setTimeout(r, 500));
+                            checkForNewImages();
+
+                            window.scrollBy(0, 200);
+                            await new Promise(r => setTimeout(r, 500));
+                            checkForNewImages();
+                        } catch (e) {
+                            console.error('Error scrolling to image:', e);
+                        }
+                    }
+
+                    // Move to next page
+                    currentPage++;
+
+                    // If we have all images, we can stop
                     if (imageSet.size >= expectedImages) {
-                        console.log('Found all expected images!');
+                        updateProgress('Found all expected images!');
                         break;
                     }
-                } catch (e) {
-                    console.log('Error with page link:', e);
                 }
-            }
-
-            // If we still don't have all images, try aggressive scrolling
-            while (attempts < maxAttempts && imageSet.size < expectedImages) {
-                attempts++;
-                console.log(`Additional attempt ${attempts}/${maxAttempts}...`);
-
-                const height = document.documentElement.scrollHeight;
-                const step = Math.floor(window.innerHeight / 3);
-
-                for (let pos = 0; pos <= height; pos += step) {
-                    await scrollToPosition(pos);
-                    
-                    // Try clicking any visible page numbers
-                    const pageNumbers = document.querySelectorAll('.page-number, [class*="page"]');
-                    for (const num of pageNumbers) {
-                        try {
-                            num.click();
-                            await new Promise(r => setTimeout(r, 2000));
-                            await waitAndCheckImages(1000);
-                        } catch (e) {}
-                    }
-                }
-
-                if (imageSet.size >= expectedImages) break;
+            } finally {
+                // Clean up the indicator
+                document.body.removeChild(indicator);
             }
 
             return Array.from(imageSet);
