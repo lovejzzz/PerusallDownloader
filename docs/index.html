@@ -196,6 +196,34 @@
             img.src = url;
         });
 
+        // Function to smoothly scroll to a position
+        const smoothScrollTo = async (position) => {
+            const start = window.pageYOffset;
+            const distance = position - start;
+            const duration = 1000;
+            const startTime = performance.now();
+
+            const easeInOutQuad = (t) => {
+                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            };
+
+            return new Promise(resolve => {
+                const scroll = (currentTime) => {
+                    const timeElapsed = currentTime - startTime;
+                    const progress = Math.min(timeElapsed / duration, 1);
+
+                    window.scrollTo(0, start + distance * easeInOutQuad(progress));
+
+                    if (progress < 1) {
+                        requestAnimationFrame(scroll);
+                    } else {
+                        resolve();
+                    }
+                };
+                requestAnimationFrame(scroll);
+            });
+        };
+
         // Function to collect all available images
         const collectAllImages = async () => {
             console.log('Starting image collection...');
@@ -227,50 +255,45 @@
             };
 
             // First, do a slow scroll through the entire document
-            console.log('Initial scroll through document...');
-            const viewportHeight = window.innerHeight;
-            const scrollStep = Math.floor(viewportHeight / 2);
-            
-            for (let pos = 0; pos <= document.body.scrollHeight; pos += scrollStep) {
-                window.scrollTo(0, pos);
-                await waitAndCheckImages(2000); // Wait 2 seconds at each position
+            console.log('Starting initial slow scroll...');
+            const scrollStep = window.innerHeight / 2;
+            const totalHeight = document.documentElement.scrollHeight;
+
+            // Scroll down slowly
+            for (let pos = 0; pos <= totalHeight; pos += scrollStep) {
+                console.log(`Scrolling to position ${pos}...`);
+                await smoothScrollTo(pos);
+                await waitAndCheckImages(3000); // Wait longer for images to load
             }
 
-            // Now start collecting images with multiple passes
-            while (noNewCount < 3 && attempts < maxAttempts) {
+            // Scroll back up slowly
+            for (let pos = totalHeight; pos >= 0; pos -= scrollStep) {
+                console.log(`Scrolling back to position ${pos}...`);
+                await smoothScrollTo(pos);
+                await waitAndCheckImages(2000);
+            }
+
+            // Now do focused passes on sections where we found images
+            while (noNewCount < 3 && attempts < maxAttempts && imageSet.size < expectedImages) {
                 attempts++;
-                console.log(`Collection attempt ${attempts}/${maxAttempts}...`);
+                console.log(`Starting collection attempt ${attempts}/${maxAttempts}...`);
 
-                // Scroll to different positions
-                const scrollPositions = [
-                    0, // Top
-                    document.body.scrollHeight / 4,
-                    document.body.scrollHeight / 2,
-                    (document.body.scrollHeight * 3) / 4,
-                    document.body.scrollHeight // Bottom
-                ];
+                const positions = Array.from(imageSet).map(img => {
+                    const rect = img.getBoundingClientRect();
+                    return window.pageYOffset + rect.top;
+                });
 
-                for (const position of scrollPositions) {
-                    window.scrollTo(0, position);
-                    
-                    // Wait and do small scrolls around current position
-                    for (let offset = -100; offset <= 100; offset += 50) {
-                        window.scrollTo(0, position + offset);
-                        await waitAndCheckImages(1000);
+                // Sort positions and remove duplicates
+                const uniquePositions = [...new Set(positions)].sort((a, b) => a - b);
+
+                for (const pos of uniquePositions) {
+                    // Check above and below each found image
+                    for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += scrollStep) {
+                        const targetPos = Math.max(0, pos + offset);
+                        console.log(`Checking around image at position ${targetPos}...`);
+                        await smoothScrollTo(targetPos);
+                        await waitAndCheckImages(2000);
                     }
-
-                    // If we have all expected images, we can stop
-                    if (imageSet.size >= expectedImages) {
-                        console.log('Found all expected images!');
-                        return Array.from(imageSet);
-                    }
-                }
-
-                // Additional pass with slower scrolling
-                console.log('Doing slow scroll pass...');
-                for (let pos = 0; pos <= document.body.scrollHeight; pos += scrollStep) {
-                    window.scrollTo(0, pos);
-                    await waitAndCheckImages(1500);
                 }
             }
 
