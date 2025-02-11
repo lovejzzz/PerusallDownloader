@@ -232,57 +232,38 @@
                 console.log(message);
             };
 
-            // Helper function to navigate to page
-            const navigateToPage = async (pageNum) => {
-                return new Promise((resolve) => {
-                    // Set up a mutation observer to watch for content changes
-                    const observer = new MutationObserver((mutations) => {
-                        const hasNewImages = document.querySelectorAll('img.chunk').length > 0;
-                        if (hasNewImages) {
-                            observer.disconnect();
-                            resolve(true);
-                        }
-                    });
-
-                    // Start observing the document with the configured parameters
-                    observer.observe(document.body, { childList: true, subtree: true });
-
-                    // Click the page link
-                    const pageLinks = Array.from(document.querySelectorAll('a'))
-                        .filter(a => a.href && a.href.includes(`page=${pageNum}`));
-
-                    if (pageLinks.length > 0) {
-                        pageLinks[0].click();
-                    } else {
-                        // If no link found, try direct navigation
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('page', pageNum);
-                        window.location.href = url.toString();
-                    }
-
-                    // Set a timeout to resolve after 5 seconds in case no changes are detected
-                    setTimeout(() => {
-                        observer.disconnect();
-                        resolve(false);
-                    }, 5000);
-                });
-            };
-
             try {
                 updateProgress('Starting image collection...');
-                let currentPage = 1;
 
-                while (imageSet.size < expectedImages && currentPage <= expectedPages) {
-                    updateProgress(`Loading page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
+                // Initial check for images
+                let totalImages = checkForNewImages();
+                if (totalImages >= expectedImages) {
+                    updateProgress('Found all images immediately!');
+                    return Array.from(imageSet);
+                }
 
-                    // Navigate to the page and wait for content to load
-                    await navigateToPage(currentPage);
-                    await new Promise(r => setTimeout(r, 1000)); // Extra wait for images
+                // Find all page links first
+                const pageLinks = Array.from(document.querySelectorAll('a'))
+                    .filter(a => a.href && a.href.includes('page='))
+                    .sort((a, b) => {
+                        const pageA = parseInt(new URL(a.href).searchParams.get('page')) || 0;
+                        const pageB = parseInt(new URL(b.href).searchParams.get('page')) || 0;
+                        return pageA - pageB;
+                    });
 
-                    // Check for new images
+                // Process each page
+                for (const link of pageLinks) {
+                    const pageNum = parseInt(new URL(link.href).searchParams.get('page'));
+                    updateProgress(`Processing page ${pageNum} (${imageSet.size}/${expectedImages} images)`);
+
+                    // Click the page link
+                    link.click();
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    // Initial check for images
                     let newImages = checkForNewImages();
                     if (newImages === 0) {
-                        // Try scrolling through the content
+                        // Try scrolling if no new images found
                         const scrollHeight = document.documentElement.scrollHeight;
                         const viewportHeight = window.innerHeight;
                         const scrollStep = Math.floor(viewportHeight / 3);
@@ -294,16 +275,7 @@
                         }
                     }
 
-                    // Move to next page if we found images
-                    if (newImages > 0) {
-                        currentPage++;
-                    } else {
-                        // If no images found, try refreshing the page
-                        window.location.reload();
-                        await new Promise(r => setTimeout(r, 2000));
-                    }
-
-                    // Check if we have all images
+                    // If we have all images, we can stop
                     if (imageSet.size >= expectedImages) {
                         updateProgress('Found all expected images!');
                         break;
