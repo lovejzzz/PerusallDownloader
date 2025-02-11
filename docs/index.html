@@ -138,9 +138,13 @@
 
         // Initialize variables
         let len = 0;
-        let times = 0;
-        let scrollPasses = 0;
-        const maxScrollPasses = 3; // Number of full scroll passes
+        let noNewImagesCount = 0;
+        let maxNoNewImages = 5; // Wait longer before concluding
+        let lastScrollPosition = 0;
+        let samePositionCount = 0;
+        let maxSamePosition = 3;
+        let totalScrollAttempts = 0;
+        let maxScrollAttempts = 100; // Increase max attempts
         
         // Helper function to load an image
         const loadImage = (url) => new Promise((resolve, reject) => {
@@ -149,36 +153,82 @@
             img.onerror = reject;
             img.src = url;
         });
-        
-        // Scroll and collect images with multiple passes
+
+        // Helper function to scroll in smaller increments
+        const smoothScroll = async (targetY) => {
+            const startY = window.pageYOffset;
+            const distance = targetY - startY;
+            const duration = 1000;
+            const steps = 20;
+            const stepSize = distance / steps;
+
+            for (let i = 1; i <= steps; i++) {
+                const y = startY + (stepSize * i);
+                window.scrollTo(0, y);
+                await new Promise(r => setTimeout(r, duration / steps));
+            }
+        };
+
+        // Scroll and collect images
         await new Promise((resolve) => {
             const scrollInterval = setInterval(async () => {
-                const images = document.querySelectorAll('img.chunk');
-                console.log(`Current images: ${images.length}, Last length: ${len}, Times: ${times}, Passes: ${scrollPasses}`);
-                
-                if (images.length > 0) {
-                    images[images.length - 1].scrollIntoView();
+                if (totalScrollAttempts >= maxScrollAttempts) {
+                    console.log('Reached maximum scroll attempts');
+                    clearInterval(scrollInterval);
+                    resolve();
+                    return;
                 }
+                totalScrollAttempts++;
+
+                const images = document.querySelectorAll('img.chunk');
+                const currentPosition = window.pageYOffset;
+                console.log(`Current images: ${images.length}, Last length: ${len}, Attempts: ${totalScrollAttempts}/${maxScrollAttempts}`);
                 
+                // Check if we're stuck at the same position
+                if (Math.abs(currentPosition - lastScrollPosition) < 10) {
+                    samePositionCount++;
+                    if (samePositionCount >= maxSamePosition) {
+                        // Try scrolling a larger distance
+                        const newPosition = currentPosition + window.innerHeight * 2;
+                        await smoothScroll(newPosition);
+                        samePositionCount = 0;
+                    }
+                } else {
+                    samePositionCount = 0;
+                }
+                lastScrollPosition = currentPosition;
+
+                // If we have images, try to scroll to the last one
+                if (images.length > 0) {
+                    const lastImage = images[images.length - 1];
+                    lastImage.scrollIntoView({ behavior: 'smooth' });
+                    await new Promise(r => setTimeout(r, 1000)); // Wait for scroll
+                }
+
                 if (len < images.length) {
                     len = images.length;
-                    times = 0;
+                    noNewImagesCount = 0;
+                    console.log('Found new images, total:', len);
                 } else {
-                    times++;
-                    if (times > 3) {
-                        // Scroll back to top
+                    noNewImagesCount++;
+                    if (noNewImagesCount >= maxNoNewImages) {
+                        // Try scrolling back to top and then to bottom
                         window.scrollTo(0, 0);
-                        
-                        scrollPasses++;
-                        times = 0;
-                        
-                        if (scrollPasses >= maxScrollPasses) {
-                            clearInterval(scrollInterval);
-                            resolve();
-                        }
+                        await new Promise(r => setTimeout(r, 2000));
+                        window.scrollTo(0, document.body.scrollHeight);
+                        await new Promise(r => setTimeout(r, 2000));
+                        noNewImagesCount = 0;
                     }
                 }
-            }, 3000);
+
+                // Check if we've found all pages (assuming 6 chunks per page)
+                const estimatedTotalPages = Math.ceil(images.length / 6);
+                if (estimatedTotalPages >= 33) { // We know we need 33 pages
+                    console.log('Found all expected pages');
+                    clearInterval(scrollInterval);
+                    resolve();
+                }
+            }, 2000);
         });
 
         // Get all images
