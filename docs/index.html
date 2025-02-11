@@ -200,8 +200,6 @@
         const collectAllImages = async () => {
             console.log('Starting image collection...');
             const imageSet = new Set();
-            let attempts = 0;
-            const maxAttempts = 15;
             const expectedImages = 6 * expectedPages; // Calculate total expected images
 
             // Helper function to check for new images
@@ -220,7 +218,7 @@
                 if (newImages > 0) {
                     console.log(`Found ${imageSet.size} total images (+${newImages} new)`);
                 }
-                return imageSet.size;
+                return newImages;
             };
 
             // Create a visual indicator
@@ -234,53 +232,85 @@
                 console.log(message);
             };
 
+            // Helper function to navigate to page
+            const navigateToPage = async (pageNum) => {
+                return new Promise((resolve) => {
+                    // Set up a mutation observer to watch for content changes
+                    const observer = new MutationObserver((mutations) => {
+                        const hasNewImages = document.querySelectorAll('img.chunk').length > 0;
+                        if (hasNewImages) {
+                            observer.disconnect();
+                            resolve(true);
+                        }
+                    });
+
+                    // Start observing the document with the configured parameters
+                    observer.observe(document.body, { childList: true, subtree: true });
+
+                    // Click the page link
+                    const pageLinks = Array.from(document.querySelectorAll('a'))
+                        .filter(a => a.href && a.href.includes(`page=${pageNum}`));
+
+                    if (pageLinks.length > 0) {
+                        pageLinks[0].click();
+                    } else {
+                        // If no link found, try direct navigation
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('page', pageNum);
+                        window.location.href = url.toString();
+                    }
+
+                    // Set a timeout to resolve after 5 seconds in case no changes are detected
+                    setTimeout(() => {
+                        observer.disconnect();
+                        resolve(false);
+                    }, 5000);
+                });
+            };
+
             try {
                 updateProgress('Starting image collection...');
+                let currentPage = 1;
 
-                // Initial check for images
-                let totalImages = checkForNewImages();
-                if (totalImages >= expectedImages) {
-                    updateProgress('Found all images immediately!');
-                    return Array.from(imageSet);
-                }
+                while (imageSet.size < expectedImages && currentPage <= expectedPages) {
+                    updateProgress(`Loading page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
 
-                // Try scrolling through the document
-                while (attempts < maxAttempts && totalImages < expectedImages) {
-                    attempts++;
-                    updateProgress(`Collection attempt ${attempts}/${maxAttempts} (${totalImages}/${expectedImages} images)`);
+                    // Navigate to the page and wait for content to load
+                    await navigateToPage(currentPage);
+                    await new Promise(r => setTimeout(r, 1000)); // Extra wait for images
 
-                    // Get all page links
-                    const pageLinks = Array.from(document.querySelectorAll('a'))
-                        .filter(a => a.href && a.href.includes('page='));
+                    // Check for new images
+                    let newImages = checkForNewImages();
+                    if (newImages === 0) {
+                        // Try scrolling through the content
+                        const scrollHeight = document.documentElement.scrollHeight;
+                        const viewportHeight = window.innerHeight;
+                        const scrollStep = Math.floor(viewportHeight / 3);
 
-                    // Try clicking each page link
-                    for (const link of pageLinks) {
-                        try {
-                            link.click();
+                        for (let pos = 0; pos <= scrollHeight && newImages < 6; pos += scrollStep) {
+                            window.scrollTo(0, pos);
                             await new Promise(r => setTimeout(r, 300));
-                            
-                            // Quick scroll through the document
-                            const scrollHeight = document.documentElement.scrollHeight;
-                            const viewportHeight = window.innerHeight;
-                            const scrollStep = Math.floor(viewportHeight / 2);
-
-                            for (let pos = 0; pos <= scrollHeight; pos += scrollStep) {
-                                window.scrollTo(0, pos);
-                                await new Promise(r => setTimeout(r, 100));
-                                totalImages = checkForNewImages();
-                                
-                                if (totalImages >= expectedImages) {
-                                    updateProgress('Found all expected images!');
-                                    return Array.from(imageSet);
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Error clicking page link:', e);
+                            newImages = checkForNewImages();
                         }
+                    }
+
+                    // Move to next page if we found images
+                    if (newImages > 0) {
+                        currentPage++;
+                    } else {
+                        // If no images found, try refreshing the page
+                        window.location.reload();
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+
+                    // Check if we have all images
+                    if (imageSet.size >= expectedImages) {
+                        updateProgress('Found all expected images!');
+                        break;
                     }
                 }
 
-                updateProgress(`Collection complete. Found ${totalImages} images.`);
+                updateProgress(`Collection complete. Found ${imageSet.size} images.`);
             } finally {
                 document.body.removeChild(indicator);
             }
