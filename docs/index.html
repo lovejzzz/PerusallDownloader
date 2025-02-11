@@ -294,9 +294,6 @@
         // Use the organized pages
         console.log(`Using ${pages.length * 6} images organized into ${pages.length} complete pages`);
         
-        // Use our pre-organized pages
-        const chunks = pages;
-        
         // Helper function to get page number from URL or data attributes
         const getPageNumber = (img) => {
             // Try URL patterns first
@@ -414,7 +411,7 @@
         });
         
         // Process each page
-        chunks.forEach((pageChunks, pageIndex) => {
+        pages.forEach((pageChunks, pageIndex) => {
             if (pageIndex > 0) doc.addPage();
             
             const pageWidth = doc.internal.pageSize.getWidth();
