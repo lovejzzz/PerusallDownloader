@@ -373,70 +373,48 @@
         // Use the organized pages
         console.log(`Using ${pages.length * 6} images organized into ${pages.length} complete pages`);
 
-        // Wait for all images to load and get their positions
-        const imagePositions = await Promise.all(images.map(async (img) => {
-            // Get absolute position
-            const rect = img.getBoundingClientRect();
-            const absoluteTop = rect.top + window.pageYOffset;
-            
-            // Get page number
-            const pageNum = getPageNumber(img);
-            
-            return {
-                img,
-                top: absoluteTop,
-                pageNum,
-                src: img.src
-            };
-        }));
-
-        // Sort images by page number first, then by position
-        const sortedPositions = imagePositions.sort((a, b) => {
-            // If both have page numbers, use those
-            if (a.pageNum !== null && b.pageNum !== null) {
-                return a.pageNum - b.pageNum;
-            }
-            // If only one has a page number, prioritize it
-            if (a.pageNum !== null) return -1;
-            if (b.pageNum !== null) return 1;
-            // If neither has a page number, use position
-            return a.top - b.top;
+        // Create PDF
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'pt',
+            format: [595.28, 841.89] // A4 size in points
         });
 
-        // Remove duplicates by src while preserving order
-        const seen = new Set();
-        const uniquePositions = sortedPositions.filter(pos => {
-            if (seen.has(pos.src)) return false;
-            seen.add(pos.src);
-            return true;
+        // Process each page
+        pages.forEach((pageChunks, pageIndex) => {
+            if (pageIndex > 0) doc.addPage();
+            
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            
+            // Calculate height for each chunk (divide page height by 6)
+            const chunkHeight = pageHeight / 6;
+            
+            // Add each chunk vertically
+            pageChunks.forEach((chunk, index) => {
+                const y = index * chunkHeight;
+                
+                // Add image to fit full width and calculated height
+                doc.addImage(chunk, 'JPEG', 0, y, pageWidth, chunkHeight, '', 'FAST');
+            });
         });
 
-        console.log(`Unique images found: ${uniquePositions.length}`);
-        
-        // Load and group images
-        for (const pos of uniquePositions) {
-            const loadedImg = await loadImage(pos.src);
-            currentChunks.push(loadedImg);
-            
-            if (currentChunks.length === 6) {
-                chunks.push(currentChunks);
-                currentChunks = [];
-            }
-            
-            // Log the page number if available
-            if (pos.pageNum !== null) {
-                console.log(`Added image from page ${pos.pageNum}`);
-            }
-        }
-        
-        // Add any remaining chunks
-        if (currentChunks.length > 0) {
-            chunks.push(currentChunks);
-        }
-        
-        console.log(`Organized into ${chunks.length} pages`);
-        
-        // Get article title from various possible locations
+        // Get the title
+        const title = (
+            document.querySelector('h1.p-title')?.textContent?.trim() || // Try Perusall title class
+            document.querySelector('.p-title')?.textContent?.trim() || // Try without h1
+            document.querySelector('h1')?.textContent?.trim() || // Try any h1
+            document.querySelector('title')?.textContent?.trim() || // Try page title
+            'perusall_article' // Default title
+        ).replace(/[^a-z0-9]/gi, '_').toLowerCase(); // Clean the title
+        // Save the PDF
+        console.log('Saving PDF...');
+        doc.save(title + '.pdf');
+        window.downloaderRunning = false;
+
+
+
         const title = (
             document.querySelector('h1.p-title')?.textContent?.trim() || // Try Perusall title class
             document.querySelector('.p-title')?.textContent?.trim() || // Try without h1
