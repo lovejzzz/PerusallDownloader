@@ -299,22 +299,33 @@
         const allImages = await collectAllImages();
         console.log(`Collection complete. Found ${allImages.length} images.`);
 
-        // Sort images by their vertical position
-        const sortedImages = allImages.sort((a, b) => {
-            const rectA = a.getBoundingClientRect();
-            const rectB = b.getBoundingClientRect();
-            return rectA.top - rectB.top;
+        // Sort images by their vertical position and convert to data URLs
+        const imageDataPromises = allImages.map(async (img) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            return {
+                dataUrl: canvas.toDataURL('image/jpeg'),
+                top: img.getBoundingClientRect().top
+            };
         });
+
+        // Wait for all images to be processed
+        const processedImages = await Promise.all(imageDataPromises);
+
+        // Sort by vertical position
+        const sortedImages = processedImages.sort((a, b) => a.top - b.top);
 
         // Group into pages of 6 images each
         const pages = [];
         for (let i = 0; i < sortedImages.length; i += 6) {
             const pageImages = sortedImages.slice(i, i + 6);
             if (pageImages.length === 6) {
-                pages.push(pageImages);
+                pages.push(pageImages.map(img => img.dataUrl));
             }
         }
-
 
         // Use the organized pages
         console.log(`Using ${pages.length * 6} images organized into ${pages.length} complete pages`);
@@ -450,7 +461,7 @@
                 const y = index * chunkHeight;
                 
                 // Add image to fit full width and calculated height
-                doc.addImage(chunk, 'JPEG', 0, y, pageWidth, chunkHeight);
+                doc.addImage(chunk, 'JPEG', 0, y, pageWidth, chunkHeight, '', 'FAST');
             });
         });
         
