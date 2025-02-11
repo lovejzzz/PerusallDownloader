@@ -408,47 +408,11 @@
             document.querySelector('title')?.textContent?.trim() || // Try page title
             'perusall_article' // Default title
         ).replace(/[^a-z0-9]/gi, '_').toLowerCase(); // Clean the title
+
         // Save the PDF
         console.log('Saving PDF...');
         doc.save(title + '.pdf');
         window.downloaderRunning = false;
-
-
-
-        const title = (
-            document.querySelector('h1.p-title')?.textContent?.trim() || // Try Perusall title class
-            document.querySelector('.p-title')?.textContent?.trim() || // Try without h1
-            document.querySelector('h1')?.textContent?.trim() || // Try any h1
-            document.querySelector('title')?.textContent?.trim() || // Try page title
-            'Perusall_Article'
-        ).replace(/[<>:"/\|?*]/g, '-'); // Remove invalid filename characters
-        
-        // Create PDF using jsPDF
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({
-            orientation: 'p',
-            unit: 'pt',
-            format: [595.28, 841.89] // A4 size in points
-        });
-        
-        // Process each page
-        pages.forEach((pageChunks, pageIndex) => {
-            if (pageIndex > 0) doc.addPage();
-            
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            
-            // Calculate height for each chunk (divide page height by 6)
-            const chunkHeight = pageHeight / 6;
-            
-            // Add each chunk vertically
-            pageChunks.forEach((chunk, index) => {
-                const y = index * chunkHeight;
-                
-                // Add image to fit full width and calculated height
-                doc.addImage(chunk, 'JPEG', 0, y, pageWidth, chunkHeight, '', 'FAST');
-            });
-        });
         
         console.log('Saving PDF...');
         doc.save(title + '.pdf');
