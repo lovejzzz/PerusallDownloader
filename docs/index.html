@@ -205,18 +205,38 @@
             const maxAttempts = 10;
             const expectedImages = 6 * expectedPages; // Calculate total expected images
 
-            // First, try to load all sections
-            const sections = document.querySelectorAll('[class*="section"], [class*="page"]');
-            console.log(`Found ${sections.length} sections to try loading`);
+            // Helper function to wait and check for new images
+            const waitAndCheckImages = async (waitTime) => {
+                await new Promise(r => setTimeout(r, waitTime));
+                const currentImages = document.querySelectorAll('img.chunk');
+                const prevSize = imageSet.size;
+
+                currentImages.forEach(img => {
+                    if (img && img.src) {
+                        imageSet.add(img);
+                    }
+                });
+
+                if (imageSet.size > prevSize) {
+                    console.log(`Found ${imageSet.size} total images (+${imageSet.size - prevSize} new)`);
+                    noNewCount = 0;
+                    return true;
+                }
+                noNewCount++;
+                return false;
+            };
+
+            // First, do a slow scroll through the entire document
+            console.log('Initial scroll through document...');
+            const viewportHeight = window.innerHeight;
+            const scrollStep = Math.floor(viewportHeight / 2);
             
-            for (const section of sections) {
-                try {
-                    section.scrollIntoView({ behavior: 'smooth' });
-                    await new Promise(r => setTimeout(r, 1000));
-                } catch (e) {}
+            for (let pos = 0; pos <= document.body.scrollHeight; pos += scrollStep) {
+                window.scrollTo(0, pos);
+                await waitAndCheckImages(2000); // Wait 2 seconds at each position
             }
 
-            // Now start collecting images
+            // Now start collecting images with multiple passes
             while (noNewCount < 3 && attempts < maxAttempts) {
                 attempts++;
                 console.log(`Collection attempt ${attempts}/${maxAttempts}...`);
@@ -232,23 +252,11 @@
 
                 for (const position of scrollPositions) {
                     window.scrollTo(0, position);
-                    await new Promise(r => setTimeout(r, 1000));
-
-                    // Get current images
-                    const currentImages = document.querySelectorAll('img.chunk');
-                    const prevSize = imageSet.size;
-
-                    currentImages.forEach(img => {
-                        if (img && img.src) {
-                            imageSet.add(img);
-                        }
-                    });
-
-                    if (imageSet.size > prevSize) {
-                        console.log(`Found ${imageSet.size} total images (+${imageSet.size - prevSize} new)`);
-                        noNewCount = 0;
-                    } else {
-                        noNewCount++;
+                    
+                    // Wait and do small scrolls around current position
+                    for (let offset = -100; offset <= 100; offset += 50) {
+                        window.scrollTo(0, position + offset);
+                        await waitAndCheckImages(1000);
                     }
 
                     // If we have all expected images, we can stop
@@ -258,11 +266,11 @@
                     }
                 }
 
-                // Try scrolling around the current viewport
-                const currentPos = window.pageYOffset;
-                for (let offset = -window.innerHeight; offset <= window.innerHeight; offset += 100) {
-                    window.scrollTo(0, currentPos + offset);
-                    await new Promise(r => setTimeout(r, 500));
+                // Additional pass with slower scrolling
+                console.log('Doing slow scroll pass...');
+                for (let pos = 0; pos <= document.body.scrollHeight; pos += scrollStep) {
+                    window.scrollTo(0, pos);
+                    await waitAndCheckImages(1500);
                 }
             }
 
