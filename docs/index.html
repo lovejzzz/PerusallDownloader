@@ -237,13 +237,34 @@
             const scrollThroughContent = async () => {
                 const scrollHeight = document.documentElement.scrollHeight;
                 const viewportHeight = window.innerHeight;
-                const scrollStep = Math.floor(viewportHeight / 3);
+                const scrollStep = Math.floor(viewportHeight / 2);
                 let foundImages = 0;
+                let noNewImagesCount = 0;
 
-                for (let pos = 0; pos <= scrollHeight && foundImages < 6; pos += scrollStep) {
+                // Start from top
+                window.scrollTo(0, 0);
+                await new Promise(r => setTimeout(r, 500));
+
+                // Scroll until we find all images or hit the bottom multiple times
+                for (let pos = 0; pos <= scrollHeight && noNewImagesCount < 3; pos += scrollStep) {
                     window.scrollTo(0, pos);
-                    await new Promise(r => setTimeout(r, 300));
-                    foundImages += checkForNewImages();
+                    await new Promise(r => setTimeout(r, 500));
+                    
+                    const newImages = checkForNewImages();
+                    foundImages += newImages;
+
+                    if (newImages === 0) {
+                        noNewImagesCount++;
+                    } else {
+                        noNewImagesCount = 0; // Reset counter if we found images
+                    }
+
+                    // If we hit bottom, start from top again if we haven't found enough images
+                    if (pos + viewportHeight >= scrollHeight && foundImages < 6) {
+                        pos = 0;
+                        window.scrollTo(0, 0);
+                        await new Promise(r => setTimeout(r, 500));
+                    }
                 }
 
                 return foundImages;
@@ -263,24 +284,32 @@
             try {
                 updateProgress('Starting image collection...');
 
-                while (imageSet.size < expectedImages && currentPage <= expectedPages) {
+                while (currentPage <= expectedPages) {
                     updateProgress(`Processing page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
 
                     // Try to find images on the current page
                     let foundImages = await scrollThroughContent();
+                    let retryCount = 0;
 
-                    if (foundImages === 0) {
-                        // If no images found, try scrolling again more slowly
+                    // Retry up to 3 times if we don't find enough images
+                    while (foundImages < 6 && retryCount < 3) {
                         window.scrollTo(0, 0);
-                        await new Promise(r => setTimeout(r, 500));
-                        foundImages = await scrollThroughContent();
+                        await new Promise(r => setTimeout(r, 1000));
+                        foundImages += await scrollThroughContent();
+                        retryCount++;
                     }
 
                     // Move to next page
                     if (await clickNextButton()) {
                         currentPage++;
-                        await new Promise(r => setTimeout(r, 1000));
+                        await new Promise(r => setTimeout(r, 1500)); // Wait longer for page load
                     } else {
+                        // If we can't click next but haven't found all pages, try refreshing
+                        if (currentPage < expectedPages) {
+                            window.scrollTo(0, 0);
+                            await new Promise(r => setTimeout(r, 2000));
+                            continue;
+                        }
                         break;
                     }
                 }
