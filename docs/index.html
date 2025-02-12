@@ -456,24 +456,36 @@
         // Wait for all images to be processed
         const processedImages = await Promise.all(imageDataPromises);
 
-        // Sort by page number first, then vertical position
-        const sortedImages = processedImages.sort((a, b) => {
-            if (a.pageNum !== null && b.pageNum !== null) {
-                if (a.pageNum !== b.pageNum) {
-                    return a.pageNum - b.pageNum;
-                }
+        // Extract chunk number from URL
+        const getChunkNumber = (url) => {
+            const match = url.match(/chunk[_-]?(\d+)/i);
+            return match ? parseInt(match[1]) : null;
+        };
+
+        // Group images by page number
+        const pageGroups = new Map();
+        processedImages.forEach(img => {
+            const pageNum = img.pageNum || 1; // Default to page 1 if no page number
+            if (!pageGroups.has(pageNum)) {
+                pageGroups.set(pageNum, []);
             }
-            return a.top - b.top;
+            pageGroups.get(pageNum).push(img);
         });
 
-        // Group into pages of 6 images each
+        // Sort each page's chunks by their position
         const pages = [];
-        for (let i = 0; i < sortedImages.length; i += 6) {
-            const pageImages = sortedImages.slice(i, i + 6);
-            if (pageImages.length === 6) {
-                pages.push(pageImages.map(img => img.dataUrl));
+        const pageNumbers = Array.from(pageGroups.keys()).sort((a, b) => a - b);
+        
+        pageNumbers.forEach(pageNum => {
+            const pageChunks = pageGroups.get(pageNum);
+            // Sort chunks by their vertical position
+            pageChunks.sort((a, b) => a.top - b.top);
+            if (pageChunks.length === 6) {
+                pages.push(pageChunks.map(img => img.dataUrl));
+            } else {
+                console.warn(`Page ${pageNum} has ${pageChunks.length} chunks (expected 6)`);
             }
-        }
+        });
 
         // Use the organized pages
         console.log(`Using ${pages.length * 6} images organized into ${pages.length} complete pages`);
