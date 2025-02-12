@@ -149,49 +149,30 @@
 
         // Try to detect total pages from Perusall interface
         const detectTotalPages = async () => {
-            // Wait for content to load
-            await new Promise(r => setTimeout(r, 2000));
-
-            // Try to find all chunk images
-            const findAllChunks = async (maxAttempts = 5) => {
-                let attempts = 0;
-                let lastLength = 0;
-                let sameCount = 0;
-
-                while (attempts < maxAttempts) {
-                    const chunks = document.querySelectorAll('img.chunk');
-                    
-                    if (chunks.length > 0) {
-                        // If length hasn't changed for 2 attempts, we're probably done
-                        if (chunks.length === lastLength) {
-                            sameCount++;
-                            if (sameCount >= 2) {
-                                return Math.ceil(chunks.length / 6); // Each page has 6 chunks
-                            }
-                        } else {
-                            sameCount = 0;
-                        }
-                        lastLength = chunks.length;
-                    }
-
-                    // Scroll to bottom to load more chunks
-                    window.scrollTo(0, document.body.scrollHeight);
-                    await new Promise(r => setTimeout(r, 1000));
-                    attempts++;
-                }
-
-                return null;
-            };
-
+            let len = 0;
+            let times = 0;
+            
             // First scroll to top
             window.scrollTo(0, 0);
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 2000));
 
-            // Try to find chunks
-            const pages = await findAllChunks();
-            if (pages) return pages;
+            return new Promise((resolve) => {
+                const interval = setInterval(() => {
+                    const img = document.querySelectorAll('img.chunk');
+                    if (img.length > 0) {
+                        img[img.length - 1].scrollIntoView();
+                    }
 
-            return null;
+                    if (len < img.length) {
+                        len = img.length;
+                    } else if (times > 3) {
+                        clearInterval(interval);
+                        resolve(Math.ceil(len / 6)); // Each page has 6 chunks
+                    } else {
+                        times++;
+                    }
+                }, 2000);
+            });
         };
 
         // Wait for page to load and initialize
