@@ -152,6 +152,7 @@
             let len = 0;
             let times = 0;
             const imageMap = new Map(); // Use Map instead of Set to track by URL
+            let currentPage = 1;
             
             // First scroll to top
             window.scrollTo(0, 0);
@@ -162,16 +163,19 @@
                     const imgs = document.querySelectorAll('img.chunk');
                     if (imgs.length > 0) {
                         // Collect all visible images
-                        imgs.forEach(img => {
+                        imgs.forEach((img, index) => {
                             if (img.complete && img.naturalWidth > 0 && !imageMap.has(img.src)) {
                                 // Only add if we haven't seen this URL before
                                 const image = new Image();
                                 image.crossOrigin = 'anonymous'; // Enable CORS
                                 image.src = img.src;
-                                // Extract page number from URL or data attribute
-                                const urlMatch = img.src.match(/p(\d+)/);
-                                const pageNum = urlMatch ? parseInt(urlMatch[1]) : null;
-                                image.dataset.pageNumber = pageNum || img.dataset.pageNumber || '';
+                                
+                                // Calculate page and position based on order
+                                const pageNum = Math.floor(index / 6) + 1;
+                                const positionInPage = index % 6;
+                                
+                                image.dataset.pageNumber = pageNum.toString();
+                                image.dataset.position = positionInPage.toString();
                                 imageMap.set(img.src, image);
                             }
                         });
@@ -456,34 +460,32 @@
         // Wait for all images to be processed
         const processedImages = await Promise.all(imageDataPromises);
 
-        // Extract chunk number from URL
-        const getChunkNumber = (url) => {
-            const match = url.match(/chunk[_-]?(\d+)/i);
-            return match ? parseInt(match[1]) : null;
-        };
-
-        // Group images by page number
+        // Group images by page number and sort by position
         const pageGroups = new Map();
         processedImages.forEach(img => {
-            const pageNum = img.pageNum || 1; // Default to page 1 if no page number
+            const pageNum = parseInt(img.dataset.pageNumber) || 1;
+            const position = parseInt(img.dataset.position) || 0;
+            
             if (!pageGroups.has(pageNum)) {
-                pageGroups.set(pageNum, []);
+                pageGroups.set(pageNum, new Array(6).fill(null));
             }
-            pageGroups.get(pageNum).push(img);
+            pageGroups.get(pageNum)[position] = img;
         });
 
-        // Sort each page's chunks by their position
+        // Create pages array
         const pages = [];
         const pageNumbers = Array.from(pageGroups.keys()).sort((a, b) => a - b);
         
         pageNumbers.forEach(pageNum => {
             const pageChunks = pageGroups.get(pageNum);
-            // Sort chunks by their vertical position
-            pageChunks.sort((a, b) => a.top - b.top);
-            if (pageChunks.length === 6) {
+            // Check if page has all chunks
+            if (pageChunks.every(chunk => chunk !== null)) {
                 pages.push(pageChunks.map(img => img.dataUrl));
             } else {
-                console.warn(`Page ${pageNum} has ${pageChunks.length} chunks (expected 6)`);
+                const missingPositions = pageChunks
+                    .map((chunk, i) => chunk === null ? i : -1)
+                    .filter(i => i !== -1);
+                console.warn(`Page ${pageNum} is missing chunks at positions: ${missingPositions.join(', ')}`);
             }
         });
 
