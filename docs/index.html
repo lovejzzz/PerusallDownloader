@@ -147,10 +147,11 @@
             return null;
         };
 
-        // Try to detect total pages from Perusall interface
+        // Try to detect total pages and collect images from Perusall interface
         const detectTotalPages = async () => {
             let len = 0;
             let times = 0;
+            const imageSet = new Set();
             
             // First scroll to top
             window.scrollTo(0, 0);
@@ -160,6 +161,12 @@
                 const interval = setInterval(() => {
                     const img = document.querySelectorAll('img.chunk');
                     if (img.length > 0) {
+                        // Collect all visible images
+                        img.forEach(image => {
+                            if (image.complete && image.naturalWidth > 0) {
+                                imageSet.add(image.src);
+                            }
+                        });
                         img[img.length - 1].scrollIntoView();
                     }
 
@@ -167,7 +174,8 @@
                         len = img.length;
                     } else if (times > 3) {
                         clearInterval(interval);
-                        resolve(Math.ceil(len / 6)); // Each page has 6 chunks
+                        const pages = Math.ceil(len / 6); // Each page has 6 chunks
+                        resolve({ pages, images: Array.from(imageSet) });
                     } else {
                         times++;
                     }
@@ -178,19 +186,17 @@
         // Wait for page to load and initialize
         await new Promise(r => setTimeout(r, 2000));
 
-        // Initialize variables
-        const expectedPages = await detectTotalPages(); // Try to detect total pages
-        if (!expectedPages) {
+        // Initialize variables and collect images
+        const result = await detectTotalPages(); // Try to detect total pages and collect images
+        if (!result || !result.pages) {
             throw new Error('Could not detect total pages. Please try again.');
         }
+        const expectedPages = result.pages;
         console.log('Detected total pages:', expectedPages);
 
-        // Wait for initial content to load
-        await new Promise(r => setTimeout(r, 2000));
-
-        // Scroll to top to ensure we start from the beginning
-        window.scrollTo(0, 0);
-        await new Promise(r => setTimeout(r, 1000));
+        // Use the collected images
+        const allImages = result.images;
+        console.log(`Collected ${allImages.length} images during page detection`);
 
         const expectedImages = expectedPages * 6;
         console.log(`Expecting ${expectedImages} images (${expectedPages} pages * 6 images per page)`);
@@ -404,10 +410,8 @@
             return null; // Return null if no page number found
         };
 
-        // Collect and organize images
-        console.log('Starting image collection process...');
-        const allImages = await collectAllImages();
-        console.log(`Collection complete. Found ${allImages.length} images.`);
+        // Images already collected during page detection
+        console.log(`Using ${allImages.length} images collected during page detection`);
 
         // Sort images by their vertical position and convert to data URLs
         const imageDataPromises = allImages.map(async (img) => {
