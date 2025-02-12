@@ -151,7 +151,7 @@
         const detectTotalPages = async () => {
             let len = 0;
             let times = 0;
-            const imageSet = new Set();
+            const imageMap = new Map(); // Use Map instead of Set to track by URL
             
             // First scroll to top
             window.scrollTo(0, 0);
@@ -163,13 +163,16 @@
                     if (imgs.length > 0) {
                         // Collect all visible images
                         imgs.forEach(img => {
-                            if (img.complete && img.naturalWidth > 0) {
-                                // Create a new image element to ensure it's loaded
+                            if (img.complete && img.naturalWidth > 0 && !imageMap.has(img.src)) {
+                                // Only add if we haven't seen this URL before
                                 const image = new Image();
                                 image.crossOrigin = 'anonymous'; // Enable CORS
                                 image.src = img.src;
-                                image.dataset.pageNumber = img.dataset.pageNumber || '';
-                                imageSet.add(image);
+                                // Extract page number from URL or data attribute
+                                const urlMatch = img.src.match(/p(\d+)/);
+                                const pageNum = urlMatch ? parseInt(urlMatch[1]) : null;
+                                image.dataset.pageNumber = pageNum || img.dataset.pageNumber || '';
+                                imageMap.set(img.src, image);
                             }
                         });
                         imgs[imgs.length - 1].scrollIntoView();
@@ -180,7 +183,10 @@
                     } else if (times > 3) {
                         clearInterval(interval);
                         const pages = Math.ceil(len / 6); // Each page has 6 chunks
-                        resolve({ pages, images: Array.from(imageSet) });
+                        // Convert Map values to array
+                        const uniqueImages = Array.from(imageMap.values());
+                        console.log(`Found ${uniqueImages.length} unique images out of ${len} total chunks`);
+                        resolve({ pages, images: uniqueImages });
                     } else {
                         times++;
                     }
