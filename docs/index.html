@@ -350,15 +350,16 @@
                         }
                     }
                 }
-                }
 
                 updateProgress(`Collection complete. Found ${imageSet.size} images.`);
+                const collectedImages = Array.from(imageSet);
+                return collectedImages;
+            } catch (error) {
+                console.error('Error during image collection:', error);
+                throw error; // Re-throw to handle in outer try-catch
             } finally {
                 document.body.removeChild(indicator);
             }
-
-            const collectedImages = Array.from(imageSet);
-            return collectedImages;
         };
 
         // Helper function to get page number from URL or data attributes
