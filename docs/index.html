@@ -205,12 +205,36 @@
 
             // Helper function to check for new images
             const checkForNewImages = () => {
-                const currentImages = document.querySelectorAll('img.chunk');
-                const prevSize = imageSet.size;
-                let newImages = 0;
+                // Get all images that look like page chunks
+                const currentImages = Array.from(document.querySelectorAll('img'))
+                    .filter(img => {
+                        // Must have a source
+                        if (!img.src) return false;
+                        
+                        // Must be visible
+                        const rect = img.getBoundingClientRect();
+                        if (rect.width === 0 || rect.height === 0) return false;
+                        
+                        // Must be a chunk-sized image (not an icon or small image)
+                        if (rect.width < 100 || rect.height < 100) return false;
+                        
+                        // Must have page number in URL or data attributes
+                        const pageNum = getPageNumber(img);
+                        if (pageNum === null) return false;
+                        
+                        return true;
+                    });
 
+                // Sort by vertical position to maintain order
+                currentImages.sort((a, b) => {
+                    const rectA = a.getBoundingClientRect();
+                    const rectB = b.getBoundingClientRect();
+                    return rectA.top - rectB.top;
+                });
+
+                let newImages = 0;
                 currentImages.forEach(img => {
-                    if (img && img.src && !Array.from(imageSet).some(existing => existing.src === img.src)) {
+                    if (!Array.from(imageSet).some(existing => existing.src === img.src)) {
                         imageSet.add(img);
                         newImages++;
                     }
@@ -284,34 +308,48 @@
             try {
                 updateProgress('Starting image collection...');
 
-                while (currentPage <= expectedPages) {
-                    updateProgress(`Processing page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
+                // First collect all images from the current view
+                let totalFound = await scrollThroughContent();
+                if (totalFound < expectedImages) {
+                    // If we haven't found all images, start page by page collection
+                    while (currentPage <= expectedPages) {
+                        updateProgress(`Processing page ${currentPage}/${expectedPages} (${imageSet.size}/${expectedImages} images)`);
 
-                    // Try to find images on the current page
-                    let foundImages = await scrollThroughContent();
-                    let retryCount = 0;
+                        // Try to find images on the current page
+                        let foundImages = await scrollThroughContent();
+                        let retryCount = 0;
 
-                    // Retry up to 3 times if we don't find enough images
-                    while (foundImages < 6 && retryCount < 3) {
-                        window.scrollTo(0, 0);
-                        await new Promise(r => setTimeout(r, 1000));
-                        foundImages += await scrollThroughContent();
-                        retryCount++;
-                    }
-
-                    // Move to next page
-                    if (await clickNextButton()) {
-                        currentPage++;
-                        await new Promise(r => setTimeout(r, 1500)); // Wait longer for page load
-                    } else {
-                        // If we can't click next but haven't found all pages, try refreshing
-                        if (currentPage < expectedPages) {
+                        // Retry up to 3 times if we don't find exactly 6 images
+                        while (foundImages !== 6 && retryCount < 3) {
                             window.scrollTo(0, 0);
-                            await new Promise(r => setTimeout(r, 2000));
-                            continue;
+                            await new Promise(r => setTimeout(r, 1000));
+                            foundImages = await scrollThroughContent(); // Replace instead of add
+                            retryCount++;
                         }
-                        break;
+
+                        // If we still don't have 6 images after retries, log warning
+                        if (foundImages !== 6) {
+                            console.warn(`Warning: Found ${foundImages} images on page ${currentPage} (expected 6)`);
+                        }
+
+                        // Move to next page
+                        if (await clickNextButton()) {
+                            currentPage++;
+                            await new Promise(r => setTimeout(r, 2000)); // Wait even longer for page load
+                        } else {
+                            // If we can't click next but haven't found all pages, try refreshing
+                            if (currentPage < expectedPages) {
+                                window.scrollTo(0, 0);
+                                await new Promise(r => setTimeout(r, 2000));
+                                if (!await clickNextButton()) {
+                                    console.warn(`Warning: Could not proceed to next page after ${currentPage}`);
+                                    break;
+                                }
+                            }
+                            break;
+                        }
                     }
+                }
                 }
 
                 updateProgress(`Collection complete. Found ${imageSet.size} images.`);
