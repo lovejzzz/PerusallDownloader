@@ -440,8 +440,8 @@
                         ctx.drawImage(img, 0, 0);
                         resolve({
                             dataUrl: canvas.toDataURL('image/jpeg', 0.75),
-                            top: img.getBoundingClientRect().top,
-                            pageNum: getPageNumber(img)
+                            pageNumber: img.dataset.pageNumber,
+                            position: parseInt(img.dataset.position) || 0
                         });
                     } catch (error) {
                         reject(error);
@@ -463,8 +463,8 @@
         // Group images by page number and sort by position
         const pageGroups = new Map();
         processedImages.forEach(img => {
-            const pageNum = parseInt(img.dataset.pageNumber) || 1;
-            const position = parseInt(img.dataset.position) || 0;
+            const pageNum = parseInt(img.pageNumber) || 1;
+            const position = img.position || 0;
             
             if (!pageGroups.has(pageNum)) {
                 pageGroups.set(pageNum, new Array(6).fill(null));
@@ -481,6 +481,7 @@
             // Check if page has all chunks
             if (pageChunks.every(chunk => chunk !== null)) {
                 pages.push(pageChunks.map(img => img.dataUrl));
+                console.log(`Added complete page ${pageNum}`);
             } else {
                 const missingPositions = pageChunks
                     .map((chunk, i) => chunk === null ? i : -1)
